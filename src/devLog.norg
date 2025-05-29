@@ -1,0 +1,19 @@
+2025-05-23 17:00
+implemented Pixel struct and firt sketch of PixelGrid class 
+
+2025-05-24 22:43
+now showing a blank screen and I have the basics for the pixel grid both worked out in code and I know what I'm going to code
+
+2025-05-25 02:52
+got the code working, next I'm implementing sand physics and user input 
+requirements : 
+the sand must fall in a realistic maner 
+the must be a paint brush that lets the user place pixels in the grid 
+there must be a gui that lets you change the size of the paint brush and the material pained 
+
+nice to haves in the code 
+assertions : the number of non air pixels remains the same, how to do this, when doing physics when looping through create a count
+figure out how to implement a physics system
+
+2025-05-25 06:30
+Implemented physics a few hours ago now implementing mouse inputs

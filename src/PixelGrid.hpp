@@ -1,4 +1,5 @@
 
+#include "Materials.h"
 #include "Vec2.hpp"
 #include "imgui-SFML.h"
 #include <SFML/Config.hpp>
@@ -14,6 +15,7 @@
 #include <unordered_map>
 #include <variant>
 #include <vector>
+#include "BitOperationHelpers.hpp"
 
 struct Pixel 
 {
@@ -41,15 +43,6 @@ struct DrawLineAction
     Pixel pixel_type;
 };
 
-constexpr uint8_t m_Air =  0b00000000;
-constexpr uint8_t m_Sand = 0b00000001;
-constexpr uint8_t m_Water = 0b00000010;
-constexpr uint8_t m_Stone = 0b00000011;
-
-static constexpr uint8_t m_FixedSolid = 0b00000000;
-static constexpr uint8_t m_PowderSolid = 0b00000001;
-static constexpr uint8_t m_Liquid = 0b00000010;
-static constexpr uint8_t m_Gas= 0b00000011;
 
 using Action = std::variant<SetPixelAction, DrawCircle, DrawLineAction>;
 
@@ -104,19 +97,70 @@ class PixelGrid
         128, 128, 128, 255
     };
 
-Vec2i positionFromIndex(size_t index) {
-    if (index >= m_gridWidth * m_gridHeight) {
-        throw std::out_of_range("Index out of bounds in positionFromIndex");
+    Vec2i positionFromIndex(size_t index) {
+        if (index >= m_gridWidth * m_gridHeight) {
+            throw std::out_of_range("Index out of bounds in positionFromIndex");
+        }
+        return Vec2i(index % m_gridWidth, index / m_gridWidth);
     }
-    return Vec2i(index % m_gridWidth, index / m_gridWidth);
-}
 
-size_t indexFromPosition(Vec2i pos) {
-    if (pos.x < 0 || pos.x >= m_gridWidth || pos.y < 0 || pos.y >= m_gridHeight) {
-        throw std::out_of_range("Position out of bounds in indexFromPosition");
+    size_t indexFromPosition(Vec2i pos) {
+        if (pos.x < 0 || pos.x >= m_gridWidth || pos.y < 0 || pos.y >= m_gridHeight) {
+            throw std::out_of_range("Position out of bounds in indexFromPosition");
+        }
+        return m_gridWidth * pos.y + pos.x;
     }
-    return m_gridWidth * pos.y + pos.x;
-}
+
+    bool checkInBounds(Vec2i pos) {
+        if (pos.x < 0 || pos.x >= m_gridWidth) {
+            return false;
+        }
+        if (pos.y < 0 || pos.y >= m_gridHeight) {
+            return false;
+        }
+        return true;
+    }
+
+    template<typename T>
+    T selectRandomElement(std::vector<T> & vec) {
+        int vectorLength = vec.size();
+        auto theDistribution = std::uniform_int_distribution(0, vectorLength - 1);
+        int theIndex = theDistribution(gen);
+        return vec[theIndex];
+    }
+
+    int nextPositionPhysics(std::vector<std::vector<Vec2i>> nextPositionDeltasLevels, int index) 
+    {
+        Vec2i pos = positionFromIndex(index);
+        int belowIndex;
+        // deltas closer to the start have higher priority 
+        Vec2i currentPosition = positionFromIndex(index);
+        
+        for (std::vector<Vec2i> nextPositionDeltas : nextPositionDeltasLevels) {
+            std::vector<int> nextPositions = {};
+            for (Vec2i deltaPos : nextPositionDeltas) {
+                Vec2i trialPos = currentPosition + deltaPos;
+                if (not checkInBounds(trialPos)) {
+                    continue;
+                }
+                int trialIndex = indexFromPosition(trialPos);
+
+                if (m_pixelGrid[curr][trialIndex].Material == materials::air && 
+                    m_pixelGrid[next][trialIndex].Material == materials::air) {
+                    if (nextPositionDeltas.size() == 1) {
+                        return trialIndex;
+                    }
+                    nextPositions.push_back(trialIndex);
+                }
+            }
+            if (nextPositions.empty() == false) {
+                return selectRandomElement(nextPositions);
+            }
+
+        }
+
+        return index;
+    }
 
     void doPhysics()
     {
@@ -129,57 +173,29 @@ size_t indexFromPosition(Vec2i pos) {
         // Clear the next grid first by resizing and filling with default Pixels (optional)
         clearNextPixelGrid();
 
-        Vec2i pos;
+        using nextPos  = std::vector<std::vector<Vec2i>>;
+        nextPos nextPositionDeltasLevels_sand = {
+            { Vec2i(0,1) }, 
+            { Vec2i(-1,1), Vec2i(1,1) }
+        };
+
+        nextPos nextPositionDeltasLevels_water = {
+            { Vec2i(0,-1) }, 
+            { Vec2i(-1,-1), Vec2i(1,-1) },
+            { Vec2i(-1,0), Vec2i(1,0) }
+        };
+
         for (size_t i = 0; i < m_pixelGrid[curr].size(); ++i) {
 
-            if (m_pixelGrid[curr][i].Material == m_Air) { continue; }
+            if (m_pixelGrid[curr][i].Material == materials::air) { continue; }
             /**/
-            pos = positionFromIndex(i);
-            if (m_pixelGrid[curr][i].Material == m_Sand && pos.y != (m_gridHeight - 1)) 
+
+            if (m_pixelGrid[curr][i].Material == materials::sand )
             {
-                // check the bottom 3 pixels to see if any of them are air to define the possible 
-                // next positions 
-                std::vector<int> nextPositions = {};
-                int belowIndex;
-
-                belowIndex = indexFromPosition(Vec2i(pos.x, pos.y+1));
-                if (m_pixelGrid[curr][belowIndex].Material == m_Air) {
-                    m_pixelGrid[next][belowIndex] = m_pixelGrid[curr][i];
-                    continue;
-                } 
-
-                for (int xs = 0; xs < 2; xs ++) {
-                    int newX = pos.x + 2*xs - 1;
-                    if (newX < m_gridWidth && newX >= 0) {
-                        int lookupIndex = indexFromPosition(Vec2i(newX, pos.y+1));
-
-                        if (m_pixelGrid[curr][lookupIndex].Material == m_Air) {
-                            nextPositions.push_back(lookupIndex);
-                        }
-                    }
-                }
-
-                if (!nextPositions.empty()) {
-                    if (nextPositions.size() == 1) {
-                        m_pixelGrid[next][nextPositions[0]] = m_pixelGrid[curr][i];
-                        continue;
-                    } else {
-                        int select_index = m_2indexDistibution(gen);
-
-                        m_pixelGrid[next][nextPositions[select_index]] = m_pixelGrid[curr][i];
-                        continue;
-                    }
-                }
-
-                m_pixelGrid[next][i] = m_pixelGrid[curr][i];
-            }
-
-            if (m_pixelGrid[curr][i].Material == m_Sand && pos.y == (m_gridHeight - 1)) 
-            {
-                m_pixelGrid[next][i] = m_pixelGrid[curr][i];
+                m_pixelGrid[next][nextPositionPhysics(nextPositionDeltasLevels_sand, i)] = m_pixelGrid[curr][i];               
             }
             
-            if(m_pixelGrid[curr][i].Material == m_Stone) {
+            if(m_pixelGrid[curr][i].Material == materials::stone) {
                 m_pixelGrid[next][i] = m_pixelGrid[curr][i];
             }
         }
@@ -205,21 +221,21 @@ size_t indexFromPosition(Vec2i pos) {
         // and load all the pixels from that config file
         // currently this sets all the pixels to air 
 
-        m_pixelGrid[curr].assign(m_gridWidth * m_gridHeight, Pixel{m_Air});
+        m_pixelGrid[curr].assign(m_gridWidth * m_gridHeight, Pixel{materials::air});
         clearNextPixelGrid();
 
         // drawing some pixels at the top of the screen
         for (int j = 0; j < m_gridHeight; j++) {
             for (int i = 0; i < m_gridWidth; i ++) {
                 if (j > 9 && j < 11) {
-                    m_pixelGrid[curr][j*m_gridWidth + i].Material = m_Sand;
+                    m_pixelGrid[curr][j*m_gridWidth + i].Material = materials::sand;
                 }
             }
         }
     }
 
     void clearNextPixelGrid() {
-        m_pixelGrid[next].assign(m_gridWidth * m_gridHeight, Pixel{m_Air});
+        m_pixelGrid[next].assign(m_gridWidth * m_gridHeight, Pixel{materials::air});
     }
 
     void executeActions(std::vector<Action> & actions) 

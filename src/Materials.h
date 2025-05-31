@@ -2,21 +2,21 @@
 #include <cstdint>
 
 namespace materials {
-    constexpr uint8_t Air   = 0b00000000;
-    constexpr uint8_t Sand  = 0b00000001;
-    constexpr uint8_t Water = 0b00000010;
-    constexpr uint8_t Stone = 0b00000011;
-    constexpr uint8_t Steel = 0b00000100;
+    constexpr uint8_t air   = 0b00000000;
+    constexpr uint8_t sand  = 0b00000001;
+    constexpr uint8_t water = 0b00000010;
+    constexpr uint8_t stone = 0b00000011;
+    constexpr uint8_t steel = 0b00000100;
 
     constexpr int NumMaterials = 5; 
 
     // Material names for UI display (e.g., ImGui picker)
     constexpr const char* MaterialNames[NumMaterials] = {
-        "Air",
-        "Sand",
-        "Water",
-        "Stone",
-        "Steel"
+        "air",
+        "sand",
+        "water",
+        "stone",
+        "steel"
     };
 }
 

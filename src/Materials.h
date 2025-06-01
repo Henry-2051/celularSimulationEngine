@@ -11,16 +11,24 @@ namespace materials {
     constexpr int NumMaterials = 5; 
 
     // Material names for UI display (e.g., ImGui picker)
-    constexpr const char* MaterialNames[NumMaterials] = {
+    constexpr const char* materialNames[NumMaterials] = {
         "air",
         "sand",
         "water",
         "stone",
         "steel"
     };
+    
+    constexpr const uint8_t materials[NumMaterials] = {
+        air,
+        sand,
+        water,
+        stone,
+        steel,
+    };
 }
 
-namespace properties {
+namespace material_properties {
 
     // Bitflags for pixel/material properties
     enum PixelFlags : uint32_t {
@@ -33,6 +41,11 @@ namespace properties {
         ConductsElecticity = 1 << 6 
         // Add more flags as needed
     };
+    constexpr PixelFlags fallingPowder = static_cast<PixelFlags>(CanFall | IsPowder | IsSolid);
+
+    constexpr PixelFlags fallingLiquid = static_cast<PixelFlags>(CanFall | IsLiquid);
+
+    constexpr PixelFlags fixedSolid = static_cast<PixelFlags>(IsSolid);
 
     struct MaterialProperties {
         PixelFlags flags;
@@ -44,7 +57,7 @@ namespace properties {
     // Lookup table for material properties indexed by material ID
     // Density is measured in kg / m3
     // Melting point is in kelvin
-    constexpr MaterialProperties MaterialLookup[materials::NumMaterials] = {
+    constexpr MaterialProperties materialLookup[materials::NumMaterials] = {
         // Air
         { PixelFlags(0), 1.2f, 60.0f },
 

@@ -3,6 +3,7 @@
 #include <string>
 #include <variant>
 #include "Game.h"
+#include "Materials.h"
 #include "UserInputOptions.h"
 #include "Vec2.hpp"
 #include "imgui-SFML.h"
@@ -48,6 +49,7 @@ Game::run()
         ImGui::SFML::Update(m_window, m_deltaClock.restart());
         sUserInput();
         heldButtons();
+        sGui();
         sRender();
     }
 }
@@ -97,19 +99,22 @@ Game::holdAndDragLine()
 void
 Game::drawCircle()
 {
-
+    
 }
 
 void
 Game::heldButtons() {
     sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
+    bool isHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow);
     Vec2f pixelPos2f = Vec2f(pixelPos.x, pixelPos.y);
-    if (m_leftClickAction == InputMode::PaintBrush) {
-        paintBrush();   
-    } else if (m_leftClickAction == InputMode::HoldAndDragLine) {
-        holdAndDragLine();
-    } else if (m_leftClickAction == InputMode::DrawCircle) {
-        drawCircle();
+    if (!isHovered) {
+        if (m_drawMethod == inputModes::paintBrush) {
+            paintBrush();   
+        } else if (m_drawMethod== inputModes::holdAndDragLine) {
+            holdAndDragLine();
+        } else if (m_drawMethod== inputModes::drawCircle) {
+            drawCircle();
+        }
     }
 
     m_prev_left_button_pressed = m_left_button_pressed;
@@ -156,12 +161,72 @@ Game::sUserInput() {
 }
 
 void
-Game::Gui() 
+Game::sGui() 
 {
     ImGui::Begin("Pixel Simulator");
 
-    if (ImGui::TreeNode("Draw Properties")) {
+    if (ImGui::TreeNode("Material selection")) {
+        if (ImGui::BeginListBox("Material")) {
+            static int itemSelectedIDX = 1;
+            int itemHighlightedIDX = -1;
+            for (int i = 0; i < sizeof(materials::materialNames) / sizeof(materials::materialNames[0]); i++) {
+                const bool isSlected = (itemSelectedIDX == i);
+                if (ImGui::Selectable(materials::materialNames[i], isSlected)) {
+                    itemSelectedIDX = i;
+                }
+                if (ImGui::IsItemHovered()) {
+                    itemHighlightedIDX = i;
+                }
+                if (isSlected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndListBox();
 
+            m_drawPixelType.material = materials::materials[itemSelectedIDX];
+        }
+        ImGui::TreePop();
+        }
+    if (ImGui::TreeNode("Draw method selection")) {
+        if (ImGui::BeginListBox("Drawing")) {
+            static int drawingMethodSelectedIDX = 0;
+            int drawingMethodHighlightedIDX = -1;
+            for (int i = 0; i < sizeof(inputModes::inputModeNames) / sizeof(inputModes::inputModeNames[0]); i++) {
+                const bool isSelected = (i == drawingMethodSelectedIDX);
+                if (ImGui::Selectable(inputModes::inputModeNames[i], isSelected)) {
+                    drawingMethodSelectedIDX = i;
+                }
+                if (ImGui::IsItemHovered()) {
+                    drawingMethodHighlightedIDX = i;
+                }
+                if (isSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+
+            m_drawMethod = inputModes::inputModes[drawingMethodSelectedIDX];
+            ImGui::EndListBox();
+        }
+        
+    if (m_drawMethod == inputModes::paintBrush) {
+        } else if (m_drawMethod == inputModes::holdAndDragLine) {
+            float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Hold to repeat:");
+            ImGui::SameLine();
+            ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true);
+            if (ImGui::ArrowButton("##left", ImGuiDir_Left) && m_drawLineWidth > 1) { m_drawLineWidth--; }
+            ImGui::SameLine(0.0f, spacing);
+            if (ImGui::ArrowButton("##right", ImGuiDir_Right)) { m_drawLineWidth++; }
+            ImGui::PopItemFlag();
+            ImGui::SameLine();
+            ImGui::Text("%f", m_drawLineWidth);
+        }
         ImGui::TreePop();
     }
+
+
+
+
+    ImGui::End();
 }

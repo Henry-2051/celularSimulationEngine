@@ -1,4 +1,3 @@
-
 #include <SFML/Graphics/Font.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Graphics/Sprite.hpp>
@@ -8,6 +7,7 @@
 #include "PixelGrid.hpp"
 #include "Vec2.hpp"
 #include "UserInputOptions.h"
+#include "Materials.h"
 
 class Game
 {
@@ -33,8 +33,8 @@ class Game
     sf::Sprite m_sprite;
     PixelGrid                m_pixelGrid;
     
-    Pixel m_drawPixelType = Pixel{m_Stone};
-    InputMode m_leftClickAction = InputMode::HoldAndDragLine;
+    Pixel m_drawPixelType = Pixel{materials::stone};
+    int m_drawMethod = inputModes::paintBrush;
 
     
     float m_drawLineWidth = 1.0f;
@@ -53,7 +53,7 @@ class Game
     void paintBrush();
     void holdAndDragLine();
     void drawCircle();
-    void Gui();
+    void sGui();
 
 public:
     Game(const std::string & config);

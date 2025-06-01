@@ -1,4 +1,3 @@
-
 #include "Materials.h"
 #include "Vec2.hpp"
 #include "imgui-SFML.h"
@@ -19,7 +18,7 @@
 
 struct Pixel 
 {
-    uint8_t Material;
+    uint8_t material;
 };
 
 struct SetPixelAction
@@ -79,7 +78,6 @@ class PixelGrid
         // Create a random device and engine
     std::random_device rd; 
     std::mt19937 gen;
-
 
     // Define colors per material in RGBA, 4 bytes per material
     // Indexing: materialToColor_c[material * 4 + 0..3]
@@ -145,8 +143,8 @@ class PixelGrid
                 }
                 int trialIndex = indexFromPosition(trialPos);
 
-                if (m_pixelGrid[curr][trialIndex].Material == materials::air && 
-                    m_pixelGrid[next][trialIndex].Material == materials::air) {
+                if (m_pixelGrid[curr][trialIndex].material == materials::air && 
+                    m_pixelGrid[next][trialIndex].material == materials::air) {
                     if (nextPositionDeltas.size() == 1) {
                         return trialIndex;
                     }
@@ -160,6 +158,10 @@ class PixelGrid
         }
 
         return index;
+    }
+
+    bool hasProperty(uint8_t material, material_properties::PixelFlags property) {
+        return bitop::flag_has_mask(material_properties::materialLookup[material].flags, property);
     }
 
     void doPhysics()
@@ -186,17 +188,22 @@ class PixelGrid
         };
 
         for (size_t i = 0; i < m_pixelGrid[curr].size(); ++i) {
+            uint8_t currentMaterial = m_pixelGrid[curr][i].material;
 
-            if (m_pixelGrid[curr][i].Material == materials::air) { continue; }
+            if (currentMaterial == materials::air) { continue; }
             /**/
 
-            if (m_pixelGrid[curr][i].Material == materials::sand )
+            if (hasProperty(currentMaterial, material_properties::fallingPowder))
             {
                 m_pixelGrid[next][nextPositionPhysics(nextPositionDeltasLevels_sand, i)] = m_pixelGrid[curr][i];               
             }
             
-            if(m_pixelGrid[curr][i].Material == materials::stone) {
+            else if(hasProperty(currentMaterial, material_properties::fixedSolid)) {
                 m_pixelGrid[next][i] = m_pixelGrid[curr][i];
+            }
+
+            else if (hasProperty(currentMaterial, material_properties::fallingLiquid)) {
+                m_pixelGrid[next][nextPositionPhysics(nextPositionDeltasLevels_water, i)] = m_pixelGrid[curr][i];               
             }
         }
 
@@ -228,7 +235,7 @@ class PixelGrid
         for (int j = 0; j < m_gridHeight; j++) {
             for (int i = 0; i < m_gridWidth; i ++) {
                 if (j > 9 && j < 11) {
-                    m_pixelGrid[curr][j*m_gridWidth + i].Material = materials::sand;
+                    m_pixelGrid[curr][j*m_gridWidth + i].material = materials::sand;
                 }
             }
         }
@@ -314,10 +321,10 @@ class PixelGrid
             {
                 int q =  (j * m_gridWidth + i);
                 int p = q * 4;
-                m_buffer[p] = m_materialToColor_c[4 * m_pixelGrid[curr][q].Material];
-                m_buffer[p+1] = m_materialToColor_c[4 * m_pixelGrid[curr][q].Material + 1];
-                m_buffer[p+2] = m_materialToColor_c[4 * m_pixelGrid[curr][q].Material + 2];
-                m_buffer[p+3] = m_materialToColor_c[4 * m_pixelGrid[curr][q].Material + 3];
+                m_buffer[p] = m_materialToColor_c[4 * m_pixelGrid[curr][q].material];
+                m_buffer[p+1] = m_materialToColor_c[4 * m_pixelGrid[curr][q].material + 1];
+                m_buffer[p+2] = m_materialToColor_c[4 * m_pixelGrid[curr][q].material + 2];
+                m_buffer[p+3] = m_materialToColor_c[4 * m_pixelGrid[curr][q].material + 3];
             }
         }
     }

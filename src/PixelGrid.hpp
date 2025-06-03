@@ -11,12 +11,86 @@
 #include <iterator>
 #include <ostream>
 #include <random>
+#include <stdexcept>
 #include <strings.h>
 #include <sys/types.h>
 #include <unordered_map>
 #include <variant>
 #include <vector>
 #include "BitOperationHelpers.hpp"
+
+template<typename T>
+class maybeResult{
+    bool m_isNothing;
+    T m_value;
+
+public:
+    maybeResult() : m_isNothing(true) {};
+
+    maybeResult(T val) : m_isNothing(false), m_value(val) {};
+
+    maybeResult<T>
+    setValue(T val) {
+        m_value = val;
+        m_isNothing = false;
+        return *this;
+    }
+
+    maybeResult<T> merge(const maybeResult<T>& tryUntilOther) const {
+        return (!m_isNothing ? *this : tryUntilOther);
+    }
+
+    // Higher-order method: takes a function generating tryUntilResult<T>, merges it with current
+    template<typename Func>
+    maybeResult<T> tryWith(Func f) const {
+        maybeResult<T> other = f();
+        return this->merge(other);
+    }
+
+    maybeResult<T> operator + (const maybeResult<T> m_val2) {
+        if (this->exists() && m_val2.exists()) {
+            return maybeResult(m_value + m_val2.m_value);
+        } else { return maybeResult<T>(); }
+    }
+
+    template<typename Func>
+    maybeResult<T> passThrough(Func f) {
+        if (this->exists()) {
+            maybeResult<T> result_val= f(m_value);
+            return (result_val.exists() ? result_val : *this);
+        } else {
+            return *this;
+        }
+    }
+
+    template<typename Func>
+    maybeResult<T> nothingThen(Func f) {
+        if (m_isNothing) {
+            return f();
+        } else {
+            return *this;
+        }
+    }
+
+    void print() {
+        if (m_isNothing) {
+            std::cout << "Nothing" << std::endl;
+        } else {
+            std::cout << "Value: "  << m_value << std::endl;
+        }
+    }
+
+    T getValue() {
+        if (not m_isNothing) {
+            return m_value;
+        } else {
+            throw std::runtime_error("Trying to get the value of Nothing\n");
+        }
+    }
+    bool exists() {
+        return not m_isNothing;
+    }
+};
 
 struct Pixel 
 {
@@ -97,21 +171,21 @@ class PixelGrid
         128, 128, 128, 255
     };
 
-    Vec2i positionFromIndex(size_t index) {
+    Vec2i positionFromIndex(size_t index) const {
         if (index >= m_gridWidth * m_gridHeight) {
             throw std::out_of_range("Index out of bounds in positionFromIndex");
         }
         return Vec2i(index % m_gridWidth, index / m_gridWidth);
     }
 
-    size_t indexFromPosition(Vec2i pos) {
+    size_t indexFromPosition(Vec2i pos) const {
         if (pos.x < 0 || pos.x >= m_gridWidth || pos.y < 0 || pos.y >= m_gridHeight) {
             throw std::out_of_range("Position out of bounds in indexFromPosition");
         }
         return m_gridWidth * pos.y + pos.x;
     }
 
-    bool isInBounds(Vec2i pos) {
+    bool isInBounds(Vec2i pos) const {
         if (pos.x < 0 || pos.x >= m_gridWidth) {
             /*pos.print();*/
             return false;
@@ -134,189 +208,83 @@ class PixelGrid
         return vec[theIndex];
     }
 
+    maybeResult<Vec2i> generalSandPhysics(Vec2i currentPosition) const {
+        const Vec2i down = Vec2i(0,1);
+        const Vec2i downRight = Vec2i(1,1);
+        const Vec2i downLeft = Vec2i(-1,1);
+        const Vec2i right = Vec2i(1,0);
+        const Vec2i left = Vec2i(-1,0);
 
-    int nextPositionPhysics(std::vector<std::vector<Vec2i>> nextPositionDeltasLevels, std::vector<std::vector<std::vector<Vec2i>>> checkEmptyBeforeSwapping, int index) 
-    {
-        Vec2i pos = positionFromIndex(index);
-        int belowIndex;
-        int checkHorizontalLength = 50;
-        int horizontalMovement = 1;
-        // deltas closer to the start have higher priority 
-        Vec2i currentPosition = positionFromIndex(index);
-        for (size_t i = 0; i < nextPositionDeltasLevels.size(); i++) {
-            std::vector<Vec2i> nextPositionDeltas = nextPositionDeltasLevels[i];
-            std::vector<int> nextPositions = {};
-            for  (size_t ii = 0; ii < nextPositionDeltas.size(); ++ii) {
-                Vec2i deltaPos = nextPositionDeltas[ii];
-                if (!checkEmptyBeforeSwapping[i][ii].empty()) {
-                    bool hasPathToFall = true;
-                    for (Vec2i posToCheck : checkEmptyBeforeSwapping[i][ii]) {
-                        if (!safeCheckIsAir(currentPosition + posToCheck)) {
-                            hasPathToFall = false;
-                        } else { continue; }
-                    }
-                    if (!hasPathToFall) {
-                        continue;
-                    }
-                }
+        auto f_checkPos = [&currentPosition, this](Vec2i movement) {
+            return (safeCheckIsAir(currentPosition + movement));
+        };
 
-                Vec2i trialPos = currentPosition + deltaPos;
-                if (not isInBounds(trialPos)) {
-                    continue;
-                }
-
-                int trialIndex = indexFromPosition(trialPos);
-
-                if (m_pixelGrid[curr][trialIndex].material == materials::air && 
-                    m_pixelGrid[next][trialIndex].material == materials::air) {
-                    nextPositions.push_back(trialIndex);
-                }
-            }
-
-            if (nextPositions.empty() == false  && nextPositionDeltas[0].y !=0 ) {
-                return selectRandomElement(nextPositions);
-
-            } else if (nextPositionDeltas.empty() == false && nextPositionDeltas[0].y == 0) {
-
-                bool enclosedP = false;
-                bool enclosedM = false;
-
-                int distToEnclosingWallP = 0;
-                int distToEnclosingWallM = 0;
-
-                bool lowerInDirectionP = false;
-                bool lowerInDirectionM = false;
-
-                int distToLowerAirP = 0;
-                int distToLowerAirM = 0;
-
-                bool inBoundsP = true;
-                bool inBoundsM = true;
-
-                bool nearOtherLiquidP = false;
-                bool nearOtherLiquidM = false;
-
-                int distanceToOtherLiquidP = 0;
-                int distanceToOtherLiquidM = 0;
-
-
-                for (int w = 1; w < checkHorizontalLength + 1; w ++) {
-                    Vec2i trialPosP = currentPosition + Vec2i(w, 0);
-                    Vec2i trialPosM = currentPosition + Vec2i(-w, 0);
-                    
-                    if (inBoundsP && isInBounds(trialPosP)) {
-                        int trialIndexP = indexFromPosition(trialPosP);
-                        uint8_t trialMaterialP = m_pixelGrid[curr][trialIndexP].material;
-                        if (!(nearOtherLiquidP || enclosedP) && trialMaterialP != materials::air) {
-                            if (!hasProperty(trialMaterialP, material_properties::fallingLiquid)) {
-                                enclosedP = true;
-                                distToEnclosingWallP = w - 1;
-                            } else {
-                                nearOtherLiquidP = true;
-                                distanceToOtherLiquidP = w - 1;
-                            }
-                        }
-                        bool anyEnclosed = enclosedP || nearOtherLiquidP;
-
-                        Vec2i trialPosDownP = trialPosP + Vec2i(0, 1);
-                        if (!anyEnclosed && !lowerInDirectionP && isInBounds(trialPosDownP)) {
-                            if (m_pixelGrid[curr][indexFromPosition(trialPosDownP)].material == materials::air) {
-                                lowerInDirectionP = true;
-                                distToLowerAirP = w;
-                            }
-                        }
-                    } else {inBoundsP = false;}
-                    if (inBoundsM && isInBounds(trialPosM)) {
-                        int trialIndexM = indexFromPosition(trialPosM);
-                        uint8_t trialMaterialM = m_pixelGrid[curr][trialIndexM].material;
-                        if (!(nearOtherLiquidM || enclosedM) && trialMaterialM != materials::air) {
-                            if (!hasProperty(trialMaterialM, material_properties::fallingLiquid)) {
-                                enclosedM = true;
-                                distToEnclosingWallM = w - 1;
-                            } else {
-                                nearOtherLiquidM = true;
-                                distanceToOtherLiquidM = w - 1;
-                            }
-                        }
-                        bool anyEnclosed = enclosedM || nearOtherLiquidM;
-
-                        Vec2i trialPosDownM = trialPosM + Vec2i(0, 1);
-                        if (!anyEnclosed && !lowerInDirectionM && isInBounds(trialPosDownM)) {
-                            if (m_pixelGrid[curr][indexFromPosition(trialPosDownM)].material == materials::air) {
-                                lowerInDirectionM = true;
-                                distToLowerAirM = w;
-                            }
-                        }
-                    } else { inBoundsM = false; }
-                    
-                    const bool placeAround = false;
-                    if (lowerInDirectionP || lowerInDirectionM) {
-                        /*std::cout << "Lower in direction\n";*/
-                        /*std::cout << "x: " << (currentPosition + Vec2i(std::min(horizontalMovement, distToLowerAirP), 0)).x << */
-                        /*             "y: " << (currentPosition + Vec2i(std::min(horizontalMovement, distToLowerAirP), 0)).y << "\n";*/
-                        if (lowerInDirectionM && lowerInDirectionP) {
-                            /*std::cout << "P : " << distToLowerAirP << ", M : " << distToLowerAirM << "\n";*/
-                            if (distToLowerAirP < distToLowerAirM) {
-                                return tryPlaceInDirection(currentPosition,  Vec2i(std::min(horizontalMovement, distToLowerAirP), 0), placeAround);
-                            }
-                            if (distToLowerAirP > distToLowerAirM) {
-                                return tryPlaceInDirection(currentPosition, Vec2i(-std::min(horizontalMovement, distToLowerAirM), 0), placeAround);
-                            }
-                        } 
-                        else if (lowerInDirectionM) {
-                            return tryPlaceInDirection(currentPosition, Vec2i(-std::min(horizontalMovement, distToLowerAirM), 0), placeAround);
-                        }
-                        else if (lowerInDirectionP) {
-                            return tryPlaceInDirection(currentPosition, Vec2i(std::min(horizontalMovement, distToLowerAirP), 0), placeAround);
-                        } 
-                    }
-                }
-            }
-
+        if (f_checkPos(down)) 
+        {
+            return maybeResult(currentPosition + down);
+        } 
+        else if (f_checkPos(right) && f_checkPos(downRight)) 
+        {
+            return maybeResult(currentPosition + downRight);
+        } 
+        else if (f_checkPos(left) && f_checkPos(downLeft)) 
+        {
+            return maybeResult(currentPosition + downLeft);
+        } 
+        else 
+        {
+            return maybeResult<Vec2i>();
         }
-
-        return index;
     }
-    bool checkIsAir(Vec2i pos) {
+
+    maybeResult<Vec2i> generalWaterPhysics(Vec2i currentPosition, bool randomRight) const {
+        const Vec2i right = Vec2i(1,0);
+        const Vec2i right2 = Vec2i(2,0);
+        const Vec2i left = Vec2i(-1,0);
+        const Vec2i left2 = Vec2i(-2,0);
+
+        auto f_checkPos = [&currentPosition, this](Vec2i movement) {
+            return (safeCheckIsAir(currentPosition + movement));
+        };
+
+        if (randomRight) /* gen belongs to the object this method belong to*/ {
+            if (f_checkPos(right)) {
+                if (f_checkPos(right2)) { return maybeResult(currentPosition + right2);}
+                return maybeResult(currentPosition + right);
+            }
+        } else {
+            if (f_checkPos(left)) {
+                if (f_checkPos(left2)) { return maybeResult(currentPosition + left2); }
+                return maybeResult(currentPosition + left);
+            }
+        }
+        return maybeResult<Vec2i>();
+    }
+
+    maybeResult<Vec2i> generalFallingPhysics(Vec2i currentPosition) {
+        const Vec2i down = Vec2i(0,1);
+
+        auto f_checkPos = [&currentPosition, this](Vec2i movement) {
+            return (safeCheckIsAir(currentPosition + movement));
+        };
+
+        if (f_checkPos(down)) {
+            return maybeResult(currentPosition + down);
+        }
+        else { return maybeResult<Vec2i>(); }
+    }
+
+    bool checkIsAir(Vec2i pos) const {
         return (m_pixelGrid[curr][indexFromPosition(pos)].material == materials::air &&
                 m_pixelGrid[next][indexFromPosition(pos)].material == materials::air);
     };
 
-    bool safeCheckIsAir(Vec2i pos) {
+    bool safeCheckIsAir(Vec2i pos) const {
         if (isInBounds(pos)) {
             return checkIsAir(pos);
         } else {return false;};
     }
 
-    int tryPlaceInDirection(Vec2i currentPosition, Vec2i DeltaFromCurrent, bool placeAround) {
-        if (not isInBounds(currentPosition + DeltaFromCurrent)) {
-            std::cout << "trying to place out of bounds, fix the code" << "\n";
-            return indexFromPosition(currentPosition);
-        } else {
-
-
-            if (checkIsAir(currentPosition + DeltaFromCurrent)) {
-                return indexFromPosition(currentPosition + DeltaFromCurrent);
-            } 
-            else if (placeAround){
-
-                Vec2i tryDown = currentPosition + DeltaFromCurrent + Vec2i(0, 1);
-                if (safeCheckIsAir(tryDown)) {
-                    return indexFromPosition(tryDown);
-                }
-                Vec2i tryLeft = currentPosition + DeltaFromCurrent + Vec2i(-1,0);
-                if (safeCheckIsAir(tryLeft)) {
-                    return indexFromPosition(tryLeft);
-                }
-
-                Vec2i tryRight = currentPosition + DeltaFromCurrent + Vec2i(1,0);
-                if (safeCheckIsAir(tryRight)) {
-                    return indexFromPosition(tryRight);
-                }
-            }
-        }
-        return indexFromPosition(currentPosition);
-    };
 
     bool hasProperty(uint8_t material, material_properties::PixelFlags property) {
         return bitop::flag_has_mask(material_properties::materialLookup[material].flags, property);
@@ -333,51 +301,56 @@ class PixelGrid
         // Clear the next grid first by resizing and filling with default Pixels (optional)
         clearNextPixelGrid();
 
-        using nextPos  = std::vector<std::vector<Vec2i>>;
-        nextPos nextPositionDeltasLevels_sand = {
-            { Vec2i(0,1) }, 
-            { Vec2i(-1,1), Vec2i(1,1) }
-        };
-
-        nextPos nextPositionDeltasLevels_water = {
-            { Vec2i(0,1) }, 
-            { Vec2i(-1,1), Vec2i(1,1) },
-            { Vec2i(-1,0), Vec2i(1,0) }
-        };
 
         // the pixel must have a path to move through if it moves diagonally
         // othersie it seemingly phases through containers
-        using checkPos = std::vector<std::vector<std::vector<Vec2i>>>;
-        
-        checkPos checkEmpty_sand = {
-            {{}},
-            {{Vec2i(-1,0)}, {Vec2i(1,0)}},
-        };
-
-        checkPos checkEmpty_water = {
-            {{}},
-            {{Vec2i(-1,0)}, {Vec2i(1,0)}},
-            {{}, {}}
-        };
 
 
         for (size_t i = 0; i < m_pixelGrid[curr].size(); ++i) {
             uint8_t currentMaterial = m_pixelGrid[curr][i].material;
 
-            if (currentMaterial == materials::air) { continue; }
-            /**/
+            Vec2i currentPos = positionFromIndex(i);
+            maybeResult<Vec2i> nextPos;
 
-            if (hasProperty(currentMaterial, material_properties::fallingPowder))
+            auto scopeCapturedSandPhysics = [&currentPos, this](){return this->generalSandPhysics(currentPos);};
+
+            auto scopeCapturedWaterPhysics = [&currentPos, this](){return this->generalWaterPhysics(currentPos, m_2indexDistibution(gen) == 1);};
+
+            auto scopeCaptureFallingPhysics = [this](Vec2i cPos){return this->generalFallingPhysics(cPos); };
+
+            auto waterThenFallingPhysics = [&scopeCaptureFallingPhysics, &scopeCapturedWaterPhysics](){ 
+                return (
+                    scopeCapturedWaterPhysics()
+                    .passThrough(scopeCaptureFallingPhysics)
+            );};
+
+            if (currentMaterial == materials::air) { continue; }
+
+            if (hasProperty(currentMaterial, material_properties::fallingLiquid))
             {
-                m_pixelGrid[next][nextPositionPhysics(nextPositionDeltasLevels_sand, checkEmpty_sand, i)] = m_pixelGrid[curr][i];               
+                nextPos = maybeResult<Vec2i>()
+                    .tryWith(scopeCapturedSandPhysics)
+                    .tryWith(scopeCapturedWaterPhysics);
             }
             
-            else if(hasProperty(currentMaterial, material_properties::fixedSolid)) {
-                m_pixelGrid[next][i] = m_pixelGrid[curr][i];
+            else if(hasProperty(currentMaterial, material_properties::fallingPowder)) {
+                nextPos = maybeResult<Vec2i>()
+                    .tryWith(scopeCapturedSandPhysics);
             }
 
-            else if (hasProperty(currentMaterial, material_properties::fallingLiquid)) {
-                m_pixelGrid[next][nextPositionPhysics(nextPositionDeltasLevels_water, checkEmpty_water, i)] = m_pixelGrid[curr][i];               
+            else if (hasProperty(currentMaterial, material_properties::fixedSolid)) {
+                nextPos = maybeResult<Vec2i>(); // essentially a nothing
+            }
+
+            else {
+                throw std::runtime_error("UnknownMaterial fix in doPhysics method of pixelgrid class in PixelGridd.hpp");
+            } 
+
+            if (nextPos.exists()) {
+                int nextIndex = indexFromPosition(nextPos.getValue());
+                m_pixelGrid[next][nextIndex] = m_pixelGrid[curr][i];
+            } else {
+                m_pixelGrid[next][i] = m_pixelGrid[curr][i];
             }
         }
 

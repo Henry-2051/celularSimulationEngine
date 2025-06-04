@@ -36,6 +36,8 @@ Game::init(const std::string & path)
     m_sprite.setTexture(m_texture);
     m_sprite.setScale(static_cast<float>(m_scale), static_cast<float>(m_scale)); // Scale up
     /*std::cout << "sprite made\n";*/
+
+    previousTime = clock::now();
 }
 
 void
@@ -43,6 +45,15 @@ Game::run()
 {
     while (m_running) 
     {
+        m_frameCount +=1 ;
+        auto currentTime = clock::now();
+
+        seconds elapsed = currentTime - previousTime;
+        if (elapsed.count() > 1.0) {
+            std::cout << "FPS: " << (m_frameCount) / elapsed.count() << std::endl; 
+            m_frameCount = 0;
+            previousTime = currentTime;
+        }
         /*std::cout << "Running program\n";*/
         m_pixelGrid.update();       
         /*std::cout << "updated\n";*/

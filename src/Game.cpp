@@ -89,7 +89,7 @@ Game::paintBrush()
         sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
         Vec2i simulationPos = pixelPos / m_scale;
         Vec2i previousSimulationPos = m_previousMousePos / m_scale;
-        Action userAction = DrawLineAction{previousSimulationPos, simulationPos, m_drawLineWidth, m_drawPixelType};
+        Action userAction = DrawLineAction{previousSimulationPos, simulationPos, m_paintBrushWidth-1, m_drawPixelType};
         m_pixelGrid.userAction(userAction);
     }
 }
@@ -97,27 +97,71 @@ Game::paintBrush()
 void
 Game::holdAndDragLine() 
 {
-    sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
-    Vec2i simulationPos = pixelPos / m_scale;
-    if (!m_prev_left_button_pressed && m_left_button_pressed) { // the user first clicks the button
+    Vec2i simulationPos = sf::Mouse::getPosition(m_window) / m_scale;
+    if (hasUserLeftClicked()) {
         m_dragLineStartSimulationPos = simulationPos; 
-    } else if (m_prev_left_button_pressed && !m_left_button_pressed) {
+    } else if (hasUserLeftReleased()) {
         Action userAction = DrawLineAction{m_dragLineStartSimulationPos, simulationPos, m_drawLineWidth, m_drawPixelType};
         m_pixelGrid.userAction(userAction);
     }
 }
 
+bool
+Game::hasUserLeftClicked()
+{
+    return !m_prev_left_button_pressed && m_left_button_pressed;
+}
+
+bool
+Game::hasUserLeftReleased()
+{
+    return m_prev_left_button_pressed && !m_left_button_pressed ;
+}
+
 void
 Game::drawCircle()
 {
-    
+    if (hasUserLeftClicked()) 
+    {
+        Vec2i simulationPos = sf::Mouse::getPosition(m_window) / m_scale;
+        Action userAction = DrawCircle{simulationPos, m_drawCircleRadius, m_drawPixelType};
+        m_pixelGrid.userAction(userAction);
+    }
+}
+
+void
+Game::drawParallelogram()
+{
+    Vec2i simulationPos = sf::Mouse::getPosition(m_window) / m_scale;
+    if (hasUserLeftClicked()) {
+        if (m_currentParallelogramState == WaitingForStart) {
+            m_firstParallelogramPoint = simulationPos;
+            m_currentParallelogramState = HeldDown1;
+        } 
+        else if (m_currentParallelogramState == WaitingForSecondClick) {
+            m_thirdParallelogramPoint = simulationPos;
+            m_currentParallelogramState = DrawingShape;
+        }
+    } 
+    else if (hasUserLeftReleased()) {
+        if (m_currentParallelogramState == HeldDown1) {
+            m_secondParallelogramPoint = simulationPos;
+            m_currentParallelogramState = WaitingForSecondClick;
+        }
+    }
+
+    if (m_currentParallelogramState == DrawingShape) {
+        m_currentParallelogramState = WaitingForStart;
+        Action action = DrawParallelogramAction{m_firstParallelogramPoint, m_secondParallelogramPoint, m_thirdParallelogramPoint, m_drawPixelType};
+        m_pixelGrid.userAction(action);
+    }
 }
 
 void
 Game::heldButtons() {
     sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
     bool isHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow);
-    Vec2f pixelPos2f = Vec2f(pixelPos.x, pixelPos.y);
+    Vec2i pixelPos2i = Vec2i(pixelPos.x, pixelPos.y);
     if (!isHovered) {
         if (m_drawMethod == inputModes::paintBrush) {
             paintBrush();   
@@ -125,47 +169,52 @@ Game::heldButtons() {
             holdAndDragLine();
         } else if (m_drawMethod== inputModes::drawCircle) {
             drawCircle();
+        } else if (m_drawMethod == inputModes::drawParallelogram) {
+            drawParallelogram();
         }
+
     }
 
     m_prev_left_button_pressed = m_left_button_pressed;
-    m_previousMousePos = pixelPos2f;
+    m_previousMousePos = pixelPos2i;
 }
 
 
 void 
 Game::sUserInput() {
     sf::Event event;
-    while (m_window.pollEvent(event)) {
-        ImGui::SFML::ProcessEvent(m_window, event);
+    if (!ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
+        while (m_window.pollEvent(event)) {
+            ImGui::SFML::ProcessEvent(m_window, event);
 
-        if (event.type == sf::Event::Closed) {
-            m_running = false;
-        }
-
-        if (event.type == sf::Event::MouseButtonPressed) {
-            switch (event.mouseButton.button) {
-                case sf::Mouse::Left:
-                    m_left_button_pressed = true;
-                case sf::Mouse::Right:
-                    break;
-                case sf::Mouse::Middle:
-                    break;
-                default:
-                    break;
+            if (event.type == sf::Event::Closed) {
+                m_running = false;
             }
-        }
 
-        if (event.type == sf::Event::MouseButtonReleased) {
-            switch (event.mouseButton.button) {
-                case sf::Mouse::Left:
-                    m_left_button_pressed = false;
-                case sf::Mouse::Right:
-                    break;
-                case sf::Mouse::Middle:
-                    break;
-                default:
-                    break;
+            if (event.type == sf::Event::MouseButtonPressed) {
+                switch (event.mouseButton.button) {
+                    case sf::Mouse::Left:
+                        m_left_button_pressed = true;
+                    case sf::Mouse::Right:
+                        break;
+                    case sf::Mouse::Middle:
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            if (event.type == sf::Event::MouseButtonReleased) {
+                switch (event.mouseButton.button) {
+                    case sf::Mouse::Left:
+                        m_left_button_pressed = false;
+                    case sf::Mouse::Right:
+                        break;
+                    case sf::Mouse::Middle:
+                        break;
+                    default:
+                        break;
+                }
             }
         }
     }
@@ -219,11 +268,25 @@ Game::sGui()
             ImGui::EndListBox();
         }
         
-    if (m_drawMethod == inputModes::paintBrush) {
-        } else if (m_drawMethod == inputModes::holdAndDragLine) {
+        if (m_drawMethod == inputModes::paintBrush) 
+        {
             float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
             ImGui::AlignTextToFramePadding();
-            ImGui::Text("Hold to repeat:");
+            ImGui::Text("Paint brush size:");
+            ImGui::SameLine();
+            ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true);
+            if (ImGui::ArrowButton("##left", ImGuiDir_Left) && m_paintBrushWidth > 1) { m_paintBrushWidth--; }
+            ImGui::SameLine(0.0f, spacing);
+            if (ImGui::ArrowButton("##right", ImGuiDir_Right)) { m_paintBrushWidth++; }
+            ImGui::PopItemFlag();
+            ImGui::SameLine();
+            ImGui::Text("%d", m_paintBrushWidth);
+        } 
+        else if (m_drawMethod == inputModes::holdAndDragLine) 
+        {
+            float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Draw line width:");
             ImGui::SameLine();
             ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true);
             if (ImGui::ArrowButton("##left", ImGuiDir_Left) && m_drawLineWidth > 1) { m_drawLineWidth--; }
@@ -231,11 +294,25 @@ Game::sGui()
             if (ImGui::ArrowButton("##right", ImGuiDir_Right)) { m_drawLineWidth++; }
             ImGui::PopItemFlag();
             ImGui::SameLine();
-            ImGui::Text("%f", m_drawLineWidth);
+            ImGui::Text("%d", m_drawLineWidth);
+        } 
+        else if (m_drawMethod == inputModes::drawCircle) 
+        {
+            float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Circle radius:");
+            ImGui::SameLine();
+            ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true);
+            if (ImGui::ArrowButton("##left", ImGuiDir_Left) && m_drawCircleRadius> 1) { m_drawCircleRadius--; }
+            ImGui::SameLine(0.0f, spacing);
+            if (ImGui::ArrowButton("##right", ImGuiDir_Right)) { m_drawCircleRadius++; }
+            ImGui::PopItemFlag();
+            ImGui::SameLine();
+            ImGui::Text("%d", m_drawCircleRadius);
         }
-        ImGui::TreePop();
-    }
 
+        ImGui::TreePop();
+    } 
 
 
 

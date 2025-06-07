@@ -40,7 +40,6 @@ public:
     {
         return Vec2(x + rhs.x, y + rhs.y);
     }
-    // - / * != += -= *= /= dist
     
     Vec2 operator - (const Vec2& rhs) const
     {
@@ -89,11 +88,15 @@ public:
         return *this;
     }
 
-    float dist(const Vec2& rhs) const {
+    T dist(const Vec2& rhs) const {
         return std::sqrt(pow(x - rhs.x, 2) + pow(y - rhs.y, 2));
     }
 
-    float abs() const {
+    T distsq(const Vec2& rhs) const {
+       return  pow(x - rhs.x, 2) + pow(y - rhs.y, 2);
+    }
+
+    T abs() const {
         return std::sqrt(pow(x, 2) + pow(y, 2));
     }
     void print() {

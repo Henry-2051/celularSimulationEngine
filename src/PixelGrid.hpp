@@ -18,84 +18,14 @@
 #include <variant>
 #include <vector>
 #include "BitOperationHelpers.hpp"
+#include "maybeResult.hpp"
 
-template<typename T>
-class maybeResult{
-    bool m_isNothing;
-    T m_value;
-
-public:
-    maybeResult() : m_isNothing(true) {};
-
-    maybeResult(T val) : m_isNothing(false), m_value(val) {};
-
-    maybeResult<T>
-    setValue(T val) {
-        m_value = val;
-        m_isNothing = false;
-        return *this;
-    }
-
-    maybeResult<T> merge(const maybeResult<T>& tryUntilOther) const {
-        return (!m_isNothing ? *this : tryUntilOther);
-    }
-
-    // Higher-order method: takes a function generating tryUntilResult<T>, merges it with current
-    template<typename Func>
-    maybeResult<T> tryWith(Func f) const {
-        maybeResult<T> other = f();
-        return this->merge(other);
-    }
-
-    maybeResult<T> operator + (const maybeResult<T> m_val2) {
-        if (this->exists() && m_val2.exists()) {
-            return maybeResult(m_value + m_val2.m_value);
-        } else { return maybeResult<T>(); }
-    }
-
-    template<typename Func>
-    maybeResult<T> passThrough(Func f) {
-        if (this->exists()) {
-            maybeResult<T> result_val= f(m_value);
-            return (result_val.exists() ? result_val : *this);
-        } else {
-            return *this;
-        }
-    }
-
-    template<typename Func>
-    maybeResult<T> nothingThen(Func f) {
-        if (m_isNothing) {
-            return f();
-        } else {
-            return *this;
-        }
-    }
-
-    void print() {
-        if (m_isNothing) {
-            std::cout << "Nothing" << std::endl;
-        } else {
-            std::cout << "Value: "  << m_value << std::endl;
-        }
-    }
-
-    T getValue() {
-        if (not m_isNothing) {
-            return m_value;
-        } else {
-            throw std::runtime_error("Trying to get the value of Nothing\n");
-        }
-    }
-    bool exists() {
-        return not m_isNothing;
-    }
-};
 
 struct Pixel 
 {
     uint8_t material;
     uint8_t updateFrame;
+    uint8_t properties;
 };
 
 struct SetPixelAction
@@ -107,7 +37,7 @@ struct SetPixelAction
 struct DrawCircle
 {
     Vec2i pos;
-    float radius;
+    int radius;
     Pixel pixel_type;
 };
 
@@ -115,18 +45,37 @@ struct DrawLineAction
 {
     Vec2i start;
     Vec2i end;
-    float width;
+    int width;
     Pixel pixel_type;
 };
 
+struct DrawParallelogramAction
+{
+    Vec2i cornerTL;
+    Vec2i cornerTR;
+    Vec2i cornerBL;
+    Pixel pixel_type;
+};
 
-using Action = std::variant<SetPixelAction, DrawCircle, DrawLineAction>;
+struct FirePixel
+{
+    uint16_t remainingBurnTime;
+    uint8_t  percentageSpreadChance;
+    bool     requiresAirToSpread;
+};
+
+struct IgniteAction
+{
+    FirePixel fireProperties;
+    Vec2i     pos;
+};
+
+using Action = std::variant<SetPixelAction, DrawCircle, DrawLineAction, DrawParallelogramAction, IgniteAction>;
 
 // TODO test whether it is more efficient to store all the pixels in a single 
 // 1D pixel and use maths to determine row and collum 
 // need to test this to find out whether it is faster or not 
 // using a 2D vector simplifies the program and is more intuitive
-using SinglePixelGrid = std::vector<std::vector<Pixel>>;
 
 // Custom game colors
 const sf::Color GrassGreen(106, 190, 48);          // Lush grass
@@ -140,9 +89,10 @@ const sf::Color MetalGray(128, 128, 128);           // Metal surfaces
 
 class PixelGrid
 {
-    SinglePixelGrid m_pixelGrid; // double buffer of pixel grids
-    std::vector<std::vector<Vec2f>> m_velocityField;
-    int curr, next;
+    std::vector<std::vector<Pixel>>     m_pixelGrid;
+    std::vector<std::vector<Vec2f>>     m_velocityField;
+    std::vector<std::vector<FirePixel>> m_fireField;
+
     int m_gridWidth;
     int m_gridHeight;
     std::vector<SetPixelAction> m_SetPixelQueue;
@@ -150,13 +100,17 @@ class PixelGrid
 
     std::vector<Action> m_actionQueue;
 
-    std::uniform_int_distribution<> m_2indexDistibution;
 
-        // Create a random device and engine
+    FirePixel m_nullFire = {0,0,0};
+
+    std::uniform_int_distribution<> m_2indexDistibution;
+    std::uniform_int_distribution<> m_0to99intDistribution;
+
     std::random_device rd; 
-    std::mt19937 gen;
 
     uint8_t m_globalUpdateFrame = 0;
+
+
 
     // Define colors per material in RGBA, 4 bytes per material
     // Indexing: materialToColor_c[material * 4 + 0..3]
@@ -171,8 +125,16 @@ class PixelGrid
         0, 0, 255, 180,
 
         // Stone -> grey
-        128, 128, 128, 255
+        84, 72, 61, 255,
+
+        // steel -> silver / blue grey
+        132, 140, 140, 255,
+
+        // wood brown
+        173, 140, 99, 255
     };
+
+    std::vector<sf::Uint8> m_fireColor = {189, 84, 40, 180};
 
     Vec2i positionFromIndex(size_t index) const {
         if (index >= m_gridWidth * m_gridHeight) {
@@ -201,13 +163,13 @@ class PixelGrid
     }
 
     template<typename T>
-    T selectRandomElement(std::vector<T> & vec) {
+    T selectRandomElement(std::vector<T> & vec, std::mt19937 randomGen) {
         int vectorLength = vec.size();
         if (vectorLength == 1) {
             return vec[0];
         }
         auto theDistribution = std::uniform_int_distribution(0, vectorLength - 1);
-        int theIndex = theDistribution(gen);
+        int theIndex = theDistribution(randomGen);
         return vec[theIndex];
     }
 
@@ -293,6 +255,29 @@ class PixelGrid
         else { return maybeResult<Vec2i>(); }
     }
 
+    const Pixel& getPixel(Vec2i pos) {
+        return m_pixelGrid[pos.x][pos.y];
+    }
+
+    maybeResult<IgniteAction> generalFirePhysics(Vec2i pos, std::mt19937 & randomGen) {
+        std::vector<Vec2i> neighborDelta = {Vec2i(1,0), Vec2i(1,-1), Vec2i(0,-1), Vec2i(-1,-1), Vec2i(-1,0), Vec2i(-1,1), Vec2i(0,1), Vec2i(1,1)};
+
+        Pixel thisPixel = m_pixelGrid[pos.x][pos.y];
+        if (bitop::flag_has_mask(thisPixel.properties, pixel_properties::OnFire)) {
+
+            material_properties::ignitionProperties burnProperties = material_properties::materialLookup[thisPixel.material].burnProperties;
+            if (m_fireField[pos.x][pos.y].percentageSpreadChance > m_0to99intDistribution(randomGen)) {
+                Vec2i dPos = selectRandomElement(neighborDelta, randomGen);
+                const uint8_t & candiateMaterial = getPixel(pos + dPos).material;
+                bool flammable = hasProperty(candiateMaterial, material_properties::Flammable);
+                return (flammable 
+                ? maybeResult(IgniteAction{{burnProperties.burnTime, burnProperties.burnPercentageChance, burnProperties.requiresAir}, pos + dPos}) 
+                : maybeResult<IgniteAction>());
+            }   
+        }
+        return maybeResult<IgniteAction>();
+    }
+
     bool checkIsAir(Vec2i pos) const {
         return (m_pixelGrid[pos.x][pos.y].material == materials::air);
     };
@@ -303,7 +288,6 @@ class PixelGrid
         } else {return false;};
     }
 
-
     bool hasProperty(uint8_t material, material_properties::PixelFlags property) {
         return bitop::flag_has_mask(material_properties::materialLookup[material].flags, property);
     }
@@ -311,15 +295,16 @@ class PixelGrid
     void doPhysics() {
         m_globalUpdateFrame ++;
         bool n2 = bitop::check_nth_bit(m_globalUpdateFrame, 1);
+        std::mt19937 randomGen(rd());
         if (bitop::check_nth_bit(m_globalUpdateFrame, 0)) {
             for (int xi = 0; xi < m_gridWidth; xi++) {
                 if (n2) {
                     for (int yi = 0; yi < m_gridHeight; yi ++) {
-                        doPhysicsOnPixel(xi,yi);
+                        doPhysicsOnPixel(xi,yi, randomGen);
                     }
                 } else {
                     for (int yi = m_gridHeight - 1; yi !=0; yi --) {
-                        doPhysicsOnPixel(xi,yi);
+                        doPhysicsOnPixel(xi,yi, randomGen);
                     }
                 }
             }
@@ -327,18 +312,18 @@ class PixelGrid
             for (int xi = m_gridWidth - 1; xi !=0; xi --) {
                 if (n2) {
                     for (int yi = 0; yi < m_gridHeight; yi ++) {
-                        doPhysicsOnPixel(xi,yi);
+                        doPhysicsOnPixel(xi,yi, randomGen);
                     }
                 } else {
                     for (int yi = m_gridHeight - 1; yi !=0; yi --) {
-                        doPhysicsOnPixel(xi,yi);
+                        doPhysicsOnPixel(xi,yi, randomGen);
                     }
                 }
             }
         }
     }
 
-    void doPhysicsOnPixel(int col, int row)
+    void doPhysicsOnPixel(int col, int row, std::mt19937 & randomGen)
     {
         // the pixel must have a path to move through if it moves diagonally
         // othersie it seemingly phases through containers
@@ -347,36 +332,38 @@ class PixelGrid
         // that pixel would just be set to air, the maybe type is to represent the case that the function does not find
         // a new place to put the pixel
 
-        uint8_t currentMaterial = m_pixelGrid[col][row].material;
+        Pixel currentPixel = m_pixelGrid[col][row];
 
-        if (currentMaterial == materials::air) { return; }
+        if (currentPixel.material == materials::air) { return; }
 
-        if (m_pixelGrid[col][row].updateFrame == m_globalUpdateFrame) { return; };
+        if (currentPixel.updateFrame == m_globalUpdateFrame) { return; };
 
         Vec2i currentPos = Vec2i(col, row);
         maybeResult<Vec2i> nextPos;
+        
+        Vec2i v_nextPos;
 
         auto scopeCapturedSandPhysics = [&currentPos, this](){return this->generalSandPhysics(currentPos);};
-        bool randomBool = m_2indexDistibution(gen);
+        bool randomBool = m_2indexDistibution(randomGen);
 
         auto scopeCapturedWaterPhysics = [&currentPos, this, randomBool](){return this->generalWaterPhysics(currentPos, randomBool);};
 
         auto scopeCaptureFallingPhysics = [this](Vec2i cPos){return this->generalFallingPhysics(cPos); };
 
 
-        if (hasProperty(currentMaterial, material_properties::fallingLiquid))
+        if (hasProperty(currentPixel.material, material_properties::fallingLiquid))
         {
             nextPos = maybeResult<Vec2i>()
                 .tryWith(scopeCapturedSandPhysics)
                 .tryWith(scopeCapturedWaterPhysics);
         }
         
-        else if(hasProperty(currentMaterial, material_properties::fallingPowder)) {
+        else if(hasProperty(currentPixel.material, material_properties::fallingPowder)) {
             nextPos = maybeResult<Vec2i>()
                 .tryWith(scopeCapturedSandPhysics);
         }
 
-        else if (hasProperty(currentMaterial, material_properties::fixedSolid)) {
+        else if (hasProperty(currentPixel.material, material_properties::fixedSolid)) {
             nextPos = maybeResult<Vec2i>(); // essentially a nothing
         }
 
@@ -385,11 +372,16 @@ class PixelGrid
         } 
 
         if (nextPos.exists()) {
-            Vec2i v_nextPos = nextPos.getValue();
+            v_nextPos = nextPos.getValue();
             m_pixelGrid[v_nextPos.x][v_nextPos.y] = m_pixelGrid[col][row];
             m_pixelGrid[v_nextPos.x][v_nextPos.y].updateFrame = m_globalUpdateFrame;
             m_pixelGrid[col][row].material = materials::air;
+        } else {
+            v_nextPos = currentPos;
         }
+
+        if (bitops::flag_has_mask(currentPixel.properties, ))
+        
 
     }
 
@@ -404,6 +396,7 @@ class PixelGrid
         gen = std::mt19937(rd());
 
         m_2indexDistibution = std::uniform_int_distribution<>(0,1);
+        m_0to99intDistribution = std::uniform_int_distribution<>(0,1);
     }
 
     void initGrid()
@@ -411,15 +404,8 @@ class PixelGrid
         // TODO overload the function to take a config file name
         // and load all the pixels from that config file
         // currently this sets all the pixels to air 
-        m_pixelGrid.assign(m_gridWidth, std::vector<Pixel>(m_gridHeight, Pixel{materials::air}));
-        // drawing some pixels at the top of the screen
-        /*for (int i = 0; i < m_gridWidth; i++) {*/
-        /*    for (int j = 0; j < m_gridHeight; j ++) {*/
-        /*        if (j > 9 && j < 11) {*/
-        /*            m_pixelGrid[i][j].material = materials::sand;*/
-        /*        }*/
-        /*    }*/
-        /*}*/
+        m_pixelGrid.assign(m_gridWidth, std::vector<Pixel>(m_gridHeight, Pixel{materials::air, 0, 0}));
+        m_fireField.assign(m_gridWidth, std::vector<FirePixel>(m_gridHeight, m_nullFire));
     }
 
 
@@ -433,23 +419,43 @@ class PixelGrid
                 drawLine(std::get<DrawLineAction>(*a));
             } else if (std::holds_alternative<DrawCircle>(*a)) {
                 drawCircle(std::get<DrawCircle>(*a));
+            } else if (std::holds_alternative<DrawParallelogramAction>(*a)) {
+                drawParallelogram(std::get<DrawParallelogramAction>(*a));
             }
             a = actions.erase(a);
         }
     }
 
+    void drawParallelogram(DrawParallelogramAction action) {
+        std::vector<Vec2i> topLine = getLine(action.cornerTL, action.cornerTR);
+        Vec2i TLtoBL = action.cornerBL - action.cornerTR;
+        for (Vec2i pixelPos : topLine) {
+            DrawLineAction line = {pixelPos, pixelPos + TLtoBL, 1,action.pixel_type};
+            drawLine(line);
+        }
+    }
+
     void setPixel(SetPixelAction action) 
     {
+        action.pixel_type.properties = pixel_properties::None;
         m_pixelGrid[action.pos.x][action.pos.y] = action.pixel_type;       
     }
 
-    void drawLine(DrawLineAction action)
+    void trySetPixel(SetPixelAction action)
     {
+        if (isInBounds(action.pos)) {
+            setPixel(action);
+        };
+    }
+
+    std::vector<Vec2i> getLine(Vec2i start, Vec2i end) {
+        std::vector<Vec2i> resultingPath = {};
+
         // Extract start and end points
-        int x0 = action.start.x;
-        int y0 = action.start.y;
-        int x1 = action.end.x;
-        int y1 = action.end.y;
+        int x0 = start.x;
+        int y0 = start.y;
+        int x1 = end.x;
+        int y1 = end.y;
 
         // Calculate differences
         int dx = std::abs(x1 - x0);
@@ -466,8 +472,7 @@ class PixelGrid
 
         while (true) {
             // Set pixel at the current position
-            setPixel(SetPixelAction{ Vec2i{x, y}, action.pixel_type });
-
+            resultingPath.push_back(Vec2i{x, y});
             if (x == x1 && y == y1) break;
 
             int e2 = 2 * err;
@@ -482,11 +487,32 @@ class PixelGrid
                 y += sy;
             }
         }
+        return resultingPath;
+    }
+
+    void drawLine(DrawLineAction action)
+    {
+        std::vector<Vec2i> path = getLine(action.start, action.end);
+        for (Vec2i pos : path) {
+            drawCircle(DrawCircle{.pos=pos, .radius=action.width, .pixel_type=action.pixel_type});
+        }
     }
 
     void drawCircle(DrawCircle action)
     {
-
+        Vec2i pos = action.pos;
+        int radius = action.radius;
+        
+        for (int x = pos.x - radius; x  <= pos.x + radius; x ++) 
+        {
+            for (int y = pos.y - radius; y <= pos.y + radius; y ++) 
+            {
+                Vec2i pos2 = Vec2i(x,y);
+                if (pos.distsq(pos2) <= pow(radius, 2)) {
+                    trySetPixel(SetPixelAction{pos2, action.pixel_type});
+                }           
+            }
+        }
     }
 
     void updateDrawBuffer()
@@ -511,7 +537,7 @@ public:
     PixelGrid() : m_gridWidth(0), m_gridHeight(0) {}
 
     PixelGrid(int width, int height) 
-        : m_gridWidth(width), m_gridHeight(height), curr(0), next(1),
+        : m_gridWidth(width), m_gridHeight(height),
         m_buffer(width * height * 4)
     {
         init();
@@ -534,8 +560,8 @@ public:
         // other sources in the game system
         // then after this is finished call doPhysics()
 
-        executeActions(m_actionQueue);
         doPhysics();
+        executeActions(m_actionQueue);
         updateDrawBuffer();
 
         /*std::cout << "done draw buffer\n";*/
@@ -546,14 +572,6 @@ public:
     }
 
     auto& getPixels() {
-        /*for (int i = 0; i < 10; i++) {*/
-        /*    for (int j = 0; j < 4 ; j ++) {*/
-        /*        std::cout << static_cast<int>(m_buffers[curr][i*4 + j]) << " "  ;*/
-        /*    };*/
-        /*    std::cout <<  ", ";*/
-        /*}*/
-        /*std::cout << "\n";*/
-        /*std::cout << m_pixelGrid[curr].size() << "\n";*/
         return m_buffer;
     }
 };

@@ -7,11 +7,10 @@ OS     := $(shell uname)
 
 # linux compiler / linker flags
 ifeq ($(OS), Linux)
-	CXX_FLAGS := -O3 -std=c++20 -Wno-unused-result -Wno-deprecated-declarations
-	INCLUDES  := -I./src -I ./src/imgui -I ./src/imgui-sfml
-	LDFLAGS   := -O3 -lsfml-graphics -lsfml-window -lsfml-system -lsfml-audio -lGL
+    CXX_FLAGS := -std=c++23 -pedantic-errors -Wall -Weffc++ -Wextra -Wconversion -Wsign-conversion -O3
+    INCLUDES  := -I./src -I ./src/imgui -I ./src/imgui-sfml
+    LDFLAGS   := -O3 -lsfml-graphics -lsfml-window -lsfml-system -lsfml-audio -lGL
 endif
-
 
 # the source files for the ecs game engine
 SRC_FILES := $(wildcard src/*.cpp src/imgui/*.cpp src/imgui-sfml/*.cpp)

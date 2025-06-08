@@ -35,10 +35,10 @@ class Game
     using seconds = std::chrono::duration<double>;
     
     std::chrono::steady_clock::time_point previousTime;
-    int m_fps                = 60;
-    int m_scale              = 8;
-    int m_width = 320;
-    int m_height = 180;
+    int m_fps                = 120;
+    int m_scale              = 4;
+    int m_width = 320 * 2;
+    int m_height = 180 * 2;
     int m_frameCount = 1;
 
     bool m_running = true;
@@ -82,6 +82,7 @@ class Game
     bool hasUserLeftClicked();
     bool hasUserLeftReleased();
 
+    void tryIgnite();
 public:
     Game(const std::string & config);
 

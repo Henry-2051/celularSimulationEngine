@@ -9,8 +9,10 @@ constexpr uint8_t water = 0b00000010;
 constexpr uint8_t stone = 0b00000011;
 constexpr uint8_t steel = 0b00000100;
 constexpr uint8_t wood  = 0b00000101;
+constexpr uint8_t oil   = 0b00000110;
+constexpr uint8_t coal  = 0b00000111;
 
-constexpr int NumMaterials = 6; 
+constexpr int NumMaterials = 8; 
 
 // Material names for UI display (e.g., ImGui picker)
 constexpr const char* materialNames[NumMaterials] = {
@@ -20,6 +22,8 @@ constexpr const char* materialNames[NumMaterials] = {
     "stone",
     "steel",
     "wood",
+    "oil",
+    "coal"
 };
 
 constexpr const uint8_t materials[NumMaterials] = {
@@ -29,6 +33,8 @@ constexpr const uint8_t materials[NumMaterials] = {
     stone,
     steel,
     wood,
+    oil,
+    coal,
 };
 }
 
@@ -63,7 +69,7 @@ constexpr PixelFlags fixedSolid = static_cast<PixelFlags>(IsSolid);
 
 struct ignitionProperties {
     uint16_t burnTime;
-    uint8_t  burnPercentageChance;
+    uint8_t  burnPercentageChance; // this is actually the chance for fire to spread from a burning pixel to a neighboring pixel
     bool     requiresAir;
 };
 
@@ -99,7 +105,11 @@ constexpr MaterialProperties materialLookup[materials::NumMaterials] = {
     { static_cast<PixelFlags>(IsSolid | CanMelt | ConductsElecticity), 7600.0f, 1770.0f, nullBurnProperties},
 
     // wood
-    { static_cast<PixelFlags>(IsSolid | Flammable), 800.0f, 0.0, {120, 2, true}},
+    { static_cast<PixelFlags>(IsSolid | Flammable), 800.0f, 0.0, {1000, 6, true}},
+
+    { static_cast<PixelFlags>(CanFall | IsLiquid | Flammable), 900.0f, 260.0f, {60,30, true}},
+    // coal
+    { static_cast<PixelFlags>(CanFall | IsPowder | IsSolid | Flammable), 1400.0, 3000.0, {2000,2, true}},
 };
 
 }

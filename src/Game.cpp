@@ -1,7 +1,6 @@
 #include <SFML/Graphics/Texture.hpp>
 #include <iostream>
 #include <string>
-#include <variant>
 #include "Game.h"
 #include "Materials.h"
 #include "UserInputOptions.h"
@@ -95,6 +94,15 @@ Game::paintBrush()
 }
 
 void
+Game::tryIgnite()
+{
+    if (m_left_button_pressed) {
+        sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
+        Action userAction = IgnitionAction{pixelPos / m_scale};
+        m_pixelGrid.userAction(userAction);
+    }
+}
+void
 Game::holdAndDragLine() 
 {
     Vec2i simulationPos = sf::Mouse::getPosition(m_window) / m_scale;
@@ -171,6 +179,8 @@ Game::heldButtons() {
             drawCircle();
         } else if (m_drawMethod == inputModes::drawParallelogram) {
             drawParallelogram();
+        } else if (m_drawMethod == inputModes::ignitePixel) {
+            tryIgnite();
         }
 
     }
@@ -226,7 +236,7 @@ Game::sGui()
     ImGui::Begin("Pixel Simulator");
 
     if (ImGui::TreeNode("Material selection")) {
-        if (ImGui::BeginListBox("Material")) {
+        if (ImGui::BeginListBox("")) {
             static int itemSelectedIDX = 1;
             int itemHighlightedIDX = -1;
             for (int i = 0; i < sizeof(materials::materialNames) / sizeof(materials::materialNames[0]); i++) {
@@ -248,7 +258,7 @@ Game::sGui()
         ImGui::TreePop();
         }
     if (ImGui::TreeNode("Draw method selection")) {
-        if (ImGui::BeginListBox("Drawing")) {
+        if (ImGui::BeginListBox("")) {
             static int drawingMethodSelectedIDX = 0;
             int drawingMethodHighlightedIDX = -1;
             for (int i = 0; i < sizeof(inputModes::inputModeNames) / sizeof(inputModes::inputModeNames[0]); i++) {
@@ -309,6 +319,12 @@ Game::sGui()
             ImGui::PopItemFlag();
             ImGui::SameLine();
             ImGui::Text("%d", m_drawCircleRadius);
+        } 
+        else if (m_drawMethod == inputModes::drawParallelogram) 
+        {
+        }
+        else if (m_drawMethod == inputModes::ignitePixel) 
+        {
         }
 
         ImGui::TreePop();

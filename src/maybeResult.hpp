@@ -24,8 +24,7 @@ public:
     // Higher-order method: takes a function generating tryUntilResult<T>, merges it with current
     template<typename Func>
     maybeResult<T> tryWith(Func f) const {
-        maybeResult<T> other = f();
-        return this->merge(other);
+        return (!m_isNothing ? *this : f());
     }
 
 
@@ -65,7 +64,18 @@ public:
             throw std::runtime_error("Trying to get the value of Nothing\n");
         }
     }
+
     bool exists() const {
         return not m_isNothing;
+    }
+
+    template <typename U>
+    requires std::convertible_to<T, U>
+    operator maybeResult<U>() const {
+        if (!m_isNothing) {
+            return maybeResult<U>(static_cast<U>(m_value));
+        } else {
+            return maybeResult<U>();
+        }
     }
 };

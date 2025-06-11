@@ -19,6 +19,7 @@ struct Vec2
         : x(xin), y(yin)
     { }
 
+    // 
     Vec2(const sf::Vector2<T>& vec)
         : x(vec.x), y(vec.y)
     { }

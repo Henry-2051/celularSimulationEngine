@@ -4,6 +4,7 @@
 #include <SFML/Config.hpp>
 #include <cmath>
 #include <cstdint>
+#include <iostream>
 #include <memory>
 #include <random>
 #include <stdexcept>
@@ -30,7 +31,11 @@ struct CompositeAction;
 
 struct IncinerationAction;
 
-using Action = std::variant<SetPixelAction, DrawCircle, DrawLineAction, DrawParallelogramAction, IgnitionAction, CompositeAction, IncinerationAction>;
+struct m_IgniteAction;
+
+struct SetPixelMaterialAndProperties;
+
+using Action = std::variant<SetPixelAction, DrawCircle, DrawLineAction, DrawParallelogramAction, IgnitionAction, CompositeAction, IncinerationAction, m_IgniteAction, SetPixelMaterialAndProperties>;
 
 struct Pixel 
 {
@@ -90,6 +95,12 @@ struct CompositeAction {
     std::vector<Action> actions;
 };
 
+struct SetPixelMaterialAndProperties{
+    Vec2i pos;
+    uint8_t material;
+    uint8_t properties;
+};
+
 
 // struct ActionPair {
 //     std::unique_ptr<Action> a1;
@@ -111,6 +122,7 @@ const sf::Color SandYellow(237, 201, 175);         // Sandy ground
 const sf::Color FireYellow(255, 200, 0, 220);      // Flickering fire (semi-transparent)
 const sf::Color SmokeGray(96, 96, 96, 150);        // Translucent smoke
 const sf::Color MetalGray(128, 128, 128);           // Metal surfaces
+
 
 class PixelGrid
 {
@@ -168,6 +180,12 @@ class PixelGrid
 
         // steam
         145, 176, 194, 255,
+
+        // lava 
+        89, 28, 10, 255,
+
+        // obsidian 
+        28, 18, 15, 255,
     };
 
     std::vector<sf::Uint8> m_fireColor = {189, 84, 40, 180};
@@ -368,7 +386,7 @@ class PixelGrid
         return m_pixelGrid[pos.x][pos.y];
     }
 
-    maybeResult<m_IgniteAction> generalFireSpreadPhysics(Vec2i pos, std::mt19937 & randomGen) const {
+    maybeResult<Action> generalFireSpreadPhysics(Vec2i pos, std::mt19937 & randomGen) const {
         std::vector<Vec2i> neighborDelta = {Vec2i(1,0), Vec2i(1,-1), Vec2i(0,-1), Vec2i(-1,-1), Vec2i(-1,0), Vec2i(-1,1), Vec2i(0,1), Vec2i(1,1)};
 
         Pixel thisPixel = m_pixelGrid[pos.x][pos.y];
@@ -391,7 +409,39 @@ class PixelGrid
         return maybeResult<m_IgniteAction>();
     }
 
+    constexpr std::array<Vec2i, 48> neighboringDeltas() const {
+        int deltas[7] = {-3,-2,-1,0,1,2,3};
+
+        int count = 0;
+        std::array<Vec2i, 48> neighbors;
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                if ((i==0) && (j==0)) {continue;}
+                neighbors[count] = Vec2i(deltas[i], deltas[j]);
+                count ++;
+            }
+        }
+
+        return neighbors;
+     }
     
+    maybeResult<Action> generalFireInteractionPhysics(Vec2i pos) {
+        std::array<Vec2i, 48> neighbors = neighboringDeltas();
+
+        Pixel thisPixel = m_pixelGrid[pos.x][pos.y];
+        for (Vec2i neighborDelta : neighbors) {
+            Vec2i targetPos= neighborDelta + pos;
+            if(!isInBounds(targetPos)) {continue;};
+            Pixel targetPixel = m_pixelGrid[targetPos.x][targetPos.y];
+            auto reaction = material_reactions::on_fire_reactions.find(std::pair(thisPixel.material, targetPixel.material));
+            if (reaction != material_reactions::on_fire_reactions.end()) {
+                SetPixelMaterialAndProperties a1 = {pos, reaction->second.first.material, reaction->second.first.properties};
+                SetPixelMaterialAndProperties a2 = {targetPos, reaction->second.second.material, reaction->second.second.properties};
+                return maybeResult(CompositeAction({a1, a2}));
+            }
+        };
+        return maybeResult<Action>();
+    }
 
 
     bool checkIsGas(Vec2i pos) const {
@@ -464,7 +514,6 @@ class PixelGrid
         auto scopeCapturedWaterPhysics = [&randomGen, &currentPos, this](){return this->generalWaterPhysics(currentPos, randomGen);};
 
 
-        maybeResult<m_IgniteAction> possibleIgnition;
 
 
         // pixel movement doesnt change the type of pixels
@@ -502,22 +551,21 @@ class PixelGrid
 
         auto scopeCapturedFireSpreadPhysics= [&randomGen, &currentPos, this](){return this->generalFireSpreadPhysics(currentPos, randomGen);};
         auto scopeCapturedIncinerationPhysics = [&currentPos, this](){return this->incinerationCheck(currentPos);};
-        auto scopeCapturedFireInteractionPhysics= = [&currentPos, this](){}; 
+        auto scopeCapturedFireInteractionPhysics=  [&currentPos, this](){return this->generalFireInteractionPhysics(currentPos);}; 
 
         if (bitop::flag_has_mask(currentPixel.properties, pixel_properties::OnFire)) {
-
-            possibleIgnition = generalFireSpreadPhysics(currentPos, randomGen);
-            maybeResult<Action> fireResult = scopeCapturedIncinerationPhysics().tryWith(scopeCapturedFireInteractionPhysics).tryWith(scopeCapturedFireSpreadPhysics);
-
-            m_fireField[currentPos.x][currentPos.y].burnTime -= 1;
-
-            if ((m_fireField[currentPos.x][currentPos.y].burnTime) == 0) {
-                currentPixel = m_incineratePixel(currentPos, currentPixel);
-            } else {
-                if (possibleIgnition.exists()) {
-                    m_Ignition(possibleIgnition.getValue());
-                }
+            if (!bitop::flag_has_mask(currentPixel.properties, pixel_properties::AlwaysOnFire)) {
+                m_fireField[currentPos.x][currentPos.y].burnTime -= 1;
             }
+            // maybeResult<Action> fireResult = scopeCapturedIncinerationPhysics().tryWith(scopeCapturedFireSpreadPhysics);
+            // maybeResult<Action> fireResult = scopeCapturedFireSpreadPhysics();
+
+            maybeResult<Action> fireResult = scopeCapturedIncinerationPhysics().tryWith(scopeCapturedFireInteractionPhysics).tryWith(scopeCapturedFireSpreadPhysics);
+            if (fireResult.exists()) {
+                executeAction(fireResult.getValue());
+            }
+            currentPixel = m_pixelGrid[currentPos.x][currentPos.y];
+
         }
 
         m_pixelGrid[currentPos.x][currentPos.y].updateFrame = m_globalUpdateFrame;
@@ -534,15 +582,15 @@ class PixelGrid
         return v_nextPos;
     }
 
-    Pixel m_incineratePixel(Vec2i pos, Pixel currentPixel) {
+    void m_incineratePixel(IncinerationAction action) {
+        Pixel currentPixel = m_pixelGrid[action.pos.x][action.pos.y];
         uint8_t newMaterial = materials::incineration_table[currentPixel.material];
         currentPixel.material = newMaterial;
 
-        setPixel({pos, currentPixel});
-        return currentPixel;
+        setPixel({action.pos, currentPixel}); 
     }
 
-    maybeResult<IncinerationAction> incinerationCheck(Vec2i pos) const {
+    maybeResult<Action> incinerationCheck(Vec2i pos) const {
         if (m_fireField[pos.x][pos.y].burnTime == 0) {
             return maybeResult<IncinerationAction>({pos, m_pixelGrid[pos.x][pos.y]});
         }
@@ -615,6 +663,15 @@ class PixelGrid
             tryIgnitePixel(std::get<IgnitionAction>(a));
         } else if (std::holds_alternative<CompositeAction>(a)) {
             doCompositeActions(std::get<CompositeAction>(a));
+        } else if (std::holds_alternative<IncinerationAction>(a)) {
+            m_incineratePixel(std::get<IncinerationAction>(a));
+        } else if (std::holds_alternative<m_IgniteAction>(a)) {
+            m_Ignition(std::get<m_IgniteAction>(a));
+        } else if (std::holds_alternative<SetPixelMaterialAndProperties>(a) ) { 
+            m_SetPixelMaterialAndProperties(std::get<SetPixelMaterialAndProperties>(a));
+        }
+        else {
+            throw std::runtime_error("Tried to execute action but execution function is not defined (executeAction)\n");
         }
     }
 
@@ -638,12 +695,18 @@ class PixelGrid
 
     void setPixel(SetPixelAction action) 
     {
-        action.pixel_type.properties = pixel_properties::None;
+        action.pixel_type.properties = pixel_properties::DefaultMaterialProperties[action.pixel_type.material];
+
         m_pixelGrid[action.pos.x][action.pos.y] = action.pixel_type;       
 
         material_properties::ignitionProperties newBurnProperties = material_properties::materialLookup[action.pixel_type.material].burnProperties;
 
         m_fireField[action.pos.x][action.pos.y] = newBurnProperties;
+    }
+
+    void m_SetPixelMaterialAndProperties(SetPixelMaterialAndProperties action) {
+        m_pixelGrid[action.pos.x][action.pos.y].material = action.material;
+        m_pixelGrid[action.pos.x][action.pos.y].properties = action.properties;
     }
 
 
@@ -730,7 +793,7 @@ class PixelGrid
             {
                 int q =  (j * m_gridWidth + i);
                 int p = q * 4;
-                if (! bitop::flag_has_mask(m_pixelGrid[i][j].properties, pixel_properties::OnFire)) {
+                if ((! bitop::flag_has_mask(m_pixelGrid[i][j].properties, pixel_properties::OnFire)) || (m_pixelGrid[i][j].material == materials::lava)) {
                     m_buffer[p  ] = m_materialToColor_c[4 * m_pixelGrid[i][j].material];
                     m_buffer[p+1] = m_materialToColor_c[4 * m_pixelGrid[i][j].material + 1];
                     m_buffer[p+2] = m_materialToColor_c[4 * m_pixelGrid[i][j].material + 2];

@@ -1,6 +1,9 @@
 #pragma once
+#include <array>
 #include <cstdint>
+#include <map>
 #include <sys/types.h>
+#include <utility>
 
 
 namespace material_properties {
@@ -18,8 +21,10 @@ constexpr uint8_t oil   = 0b00000110;
 constexpr uint8_t coal  = 0b00000111;
 constexpr uint8_t ash   = 0b00001000;
 constexpr uint8_t steam = 0b00001001;
+constexpr uint8_t lava  = 0b00001010;
+constexpr uint8_t obsidian = 0b00001011;
 
-constexpr int NumMaterials = 10; 
+constexpr int NumMaterials = 12; 
 
 // Material names for UI display (e.g., ImGui picker)
 constexpr const char* materialNames[NumMaterials] = {
@@ -32,7 +37,9 @@ constexpr const char* materialNames[NumMaterials] = {
     "oil",
     "coal",
     "ash",
-    "steam"
+    "steam",
+    "lava",
+    "obsidian"
 };
 
 constexpr const uint8_t materials[NumMaterials] = {
@@ -45,7 +52,9 @@ constexpr const uint8_t materials[NumMaterials] = {
     oil,
     coal,
     ash,
-    steam
+    steam,
+    lava,
+    obsidian
 };
 
 constexpr const uint8_t incineration_table[NumMaterials] = {
@@ -58,7 +67,9 @@ constexpr const uint8_t incineration_table[NumMaterials] = {
     air,
     air,
     ash,
-    steam
+    steam,
+    lava,
+    obsidian
 };
 }
 
@@ -67,8 +78,23 @@ namespace pixel_properties {
 enum PixelFlags : uint8_t {
     None = 0,
     OnFire = 1 << 0,
+    AlwaysOnFire = 1 << 1,
 };
 
+constexpr uint8_t DefaultMaterialProperties[materials::NumMaterials] {
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    OnFire | AlwaysOnFire,
+    None,
+};
 };
 
 namespace material_properties {
@@ -130,9 +156,10 @@ constexpr MaterialProperties materialLookup[materials::NumMaterials] = {
     { static_cast<PixelFlags>(IsSolid | CanMelt | ConductsElecticity), 7600, 1770, nullBurnProperties},
 
     // wood
-    { static_cast<PixelFlags>(IsSolid | Flammable), 800, 0, {1000, 6, true}},
+    { static_cast<PixelFlags>(IsSolid | Flammable), 800, 0, {500, 6, true}},
 
-    { static_cast<PixelFlags>(CanFall | IsLiquid | Flammable), 900, 260, {60,30, true}},
+    // oil
+    { static_cast<PixelFlags>(CanFall | IsLiquid | Flammable), 900, 260, {1000,30, true}},
 
     // coal
     { static_cast<PixelFlags>(CanFall | IsPowder | IsSolid | Flammable), 1400, 3000, {2000,2, true}},
@@ -141,7 +168,38 @@ constexpr MaterialProperties materialLookup[materials::NumMaterials] = {
     { static_cast<PixelFlags>(CanFall | IsPowder | IsSolid), 1300, 1970, nullBurnProperties },
 
     // steam
-    { static_cast<PixelFlags>(IsGas), 9, 60, nullBurnProperties }
-};
+    { static_cast<PixelFlags>(IsGas), 9, 60, nullBurnProperties },
 
+    //lava
+    { static_cast<PixelFlags>(IsLiquid | CanFall ), 2400, 1470, {999, 20, false} },
+
+    // obsidian 
+    { static_cast<PixelFlags>( IsSolid | CanMelt ), 2400, 1470, nullBurnProperties }
+};
+}
+
+namespace material_reactions {
+struct material_property_pair {
+    uint8_t material;
+    uint8_t properties;
+};
+inline std::map<std::pair<uint8_t, uint8_t>, std::pair<material_property_pair, material_property_pair>> on_fire_reactions {
+        {   
+            {materials::oil, materials::water}, 
+            {{materials::air, pixel_properties::None}, {materials::steam, pixel_properties::None}}
+        },
+
+        {   
+            {materials::wood, materials::water}, 
+            {{materials::ash, pixel_properties::None}, {materials::steam, pixel_properties::None}}
+        },
+        {   
+            {materials::coal, materials::water}, 
+            {{materials::coal, pixel_properties::None}, {materials::steam, pixel_properties::None}}
+        },
+        {
+            {materials::lava, materials::water},
+            {{materials::obsidian, pixel_properties::None}, {materials::steam, pixel_properties::None}}
+        }
+    };
 }

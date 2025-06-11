@@ -2,6 +2,11 @@
 #include <cstdint>
 #include <sys/types.h>
 
+
+namespace material_properties {
+struct ignitionProperties;
+}
+
 namespace materials {
 constexpr uint8_t air   = 0b00000000;
 constexpr uint8_t sand  = 0b00000001;
@@ -11,8 +16,10 @@ constexpr uint8_t steel = 0b00000100;
 constexpr uint8_t wood  = 0b00000101;
 constexpr uint8_t oil   = 0b00000110;
 constexpr uint8_t coal  = 0b00000111;
+constexpr uint8_t ash   = 0b00001000;
+constexpr uint8_t steam = 0b00001001;
 
-constexpr int NumMaterials = 8; 
+constexpr int NumMaterials = 10; 
 
 // Material names for UI display (e.g., ImGui picker)
 constexpr const char* materialNames[NumMaterials] = {
@@ -23,7 +30,9 @@ constexpr const char* materialNames[NumMaterials] = {
     "steel",
     "wood",
     "oil",
-    "coal"
+    "coal",
+    "ash",
+    "steam"
 };
 
 constexpr const uint8_t materials[NumMaterials] = {
@@ -35,6 +44,21 @@ constexpr const uint8_t materials[NumMaterials] = {
     wood,
     oil,
     coal,
+    ash,
+    steam
+};
+
+constexpr const uint8_t incineration_table[NumMaterials] = {
+    air,
+    sand,
+    steam,
+    stone,
+    steel,
+    ash,
+    air,
+    air,
+    ash,
+    steam
 };
 }
 
@@ -59,13 +83,14 @@ enum PixelFlags : uint32_t {
     IsSolid = 1 << 5,
     ConductsElecticity = 1 << 6 ,
     Flammable = 1 << 7,
-    // Add more flags as needed
+    IsGas = 1 << 8,
 };
 constexpr PixelFlags fallingPowder = static_cast<PixelFlags>(CanFall | IsPowder | IsSolid);
 
+constexpr PixelFlags solidPowder   = static_cast<PixelFlags>(IsPowder | IsSolid);
+
 constexpr PixelFlags fallingLiquid = static_cast<PixelFlags>(CanFall | IsLiquid);
 
-constexpr PixelFlags fixedSolid = static_cast<PixelFlags>(IsSolid);
 
 struct ignitionProperties {
     uint16_t burnTime;
@@ -75,8 +100,8 @@ struct ignitionProperties {
 
 struct MaterialProperties {
     PixelFlags flags;
-    float density;
-    float meltingPoint;
+    int density;
+    int meltingPoint;
     ignitionProperties burnProperties;
 
     // Other physical/material properties can go here.
@@ -90,26 +115,33 @@ constexpr ignitionProperties nullBurnProperties = {0,0,0};
 
 constexpr MaterialProperties materialLookup[materials::NumMaterials] = {
     // Air
-    { PixelFlags(0), 1.2f, 60.0f, nullBurnProperties },
+    { static_cast<PixelFlags>(IsGas), 10, 60, nullBurnProperties },
 
     // Sand
-    { static_cast<PixelFlags>(CanFall | IsPowder | IsSolid), 1500.0f, 1970.0f, nullBurnProperties },
+    { static_cast<PixelFlags>(CanFall | IsPowder | IsSolid), 1500, 1970, nullBurnProperties },
 
     // Water
-    { static_cast<PixelFlags>(CanFall | IsLiquid | ConductsElecticity), 1000.0f,   270.0f, nullBurnProperties },
+    { static_cast<PixelFlags>(CanFall | IsLiquid | ConductsElecticity), 1000,   270, nullBurnProperties },
 
     // Stone
-    { static_cast<PixelFlags>(IsSolid | CanMelt), 2600.0f,  1470.0f, nullBurnProperties},
+    { static_cast<PixelFlags>(IsSolid | CanMelt), 2600,  1470, nullBurnProperties},
 
     // Steel
-    { static_cast<PixelFlags>(IsSolid | CanMelt | ConductsElecticity), 7600.0f, 1770.0f, nullBurnProperties},
+    { static_cast<PixelFlags>(IsSolid | CanMelt | ConductsElecticity), 7600, 1770, nullBurnProperties},
 
     // wood
-    { static_cast<PixelFlags>(IsSolid | Flammable), 800.0f, 0.0, {1000, 6, true}},
+    { static_cast<PixelFlags>(IsSolid | Flammable), 800, 0, {1000, 6, true}},
 
-    { static_cast<PixelFlags>(CanFall | IsLiquid | Flammable), 900.0f, 260.0f, {60,30, true}},
+    { static_cast<PixelFlags>(CanFall | IsLiquid | Flammable), 900, 260, {60,30, true}},
+
     // coal
-    { static_cast<PixelFlags>(CanFall | IsPowder | IsSolid | Flammable), 1400.0, 3000.0, {2000,2, true}},
+    { static_cast<PixelFlags>(CanFall | IsPowder | IsSolid | Flammable), 1400, 3000, {2000,2, true}},
+
+    // ash
+    { static_cast<PixelFlags>(CanFall | IsPowder | IsSolid), 1300, 1970, nullBurnProperties },
+
+    // steam
+    { static_cast<PixelFlags>(IsGas), 9, 60, nullBurnProperties }
 };
 
 }

@@ -2,24 +2,35 @@
 #include "Vec2.hpp"
 #include "imgui-SFML.h"
 #include <SFML/Config.hpp>
-#include <algorithm>
-#include <bitset>
 #include <cmath>
-#include <cstddef>
 #include <cstdint>
-#include <iostream>
-#include <iterator>
-#include <ostream>
+#include <memory>
 #include <random>
 #include <stdexcept>
 #include <strings.h>
 #include <sys/types.h>
-#include <unordered_map>
 #include <variant>
 #include <vector>
 #include "BitOperationHelpers.hpp"
 #include "maybeResult.hpp"
 
+struct SetPixelAction;
+
+struct DrawCircle;
+
+struct DrawLineAction;
+
+struct DrawParallelogramAction;
+
+struct m_IgniteAction;
+
+struct IgnitionAction;
+
+struct CompositeAction;
+
+struct IncinerationAction;
+
+using Action = std::variant<SetPixelAction, DrawCircle, DrawLineAction, DrawParallelogramAction, IgnitionAction, CompositeAction, IncinerationAction>;
 
 struct Pixel 
 {
@@ -27,6 +38,8 @@ struct Pixel
     uint8_t updateFrame;
     uint8_t properties;
 };
+
+using FirePixel = material_properties::ignitionProperties;
 
 struct SetPixelAction
 {
@@ -57,13 +70,6 @@ struct DrawParallelogramAction
     Pixel pixel_type;
 };
 
-// struct FirePixel
-// {
-//     uint16_t remainingBurnTime;
-//     uint8_t  percentageSpreadChance;
-//     bool     requiresAirToSpread;
-// };
-using FirePixel = material_properties::ignitionProperties;
 
 struct m_IgniteAction
 {
@@ -75,7 +81,21 @@ struct IgnitionAction {
     Vec2i pos;
 };
 
-using Action = std::variant<SetPixelAction, DrawCircle, DrawLineAction, DrawParallelogramAction, IgnitionAction>;
+struct IncinerationAction {
+    Vec2i pos;
+    Pixel pixel;
+};
+
+struct CompositeAction {
+    std::vector<Action> actions;
+};
+
+
+// struct ActionPair {
+//     std::unique_ptr<Action> a1;
+//     std::unique_ptr<Action> a2;
+// };
+
 
 // TODO test whether it is more efficient to store all the pixels in a single 
 // 1D pixel and use maths to determine row and collum 
@@ -138,7 +158,16 @@ class PixelGrid
         173, 140, 99, 255,
 
         // oil
-        145, 108, 4, 128
+        145, 108, 4, 128,
+
+        // coal
+        94, 94, 94, 255,
+
+        // ash
+        166, 166, 166, 255,
+
+        // steam
+        145, 176, 194, 255,
     };
 
     std::vector<sf::Uint8> m_fireColor = {189, 84, 40, 180};
@@ -175,7 +204,7 @@ class PixelGrid
         const Vec2i left = Vec2i(-1,0);
 
         auto f_checkPos = [&currentPosition, this](Vec2i movement) {
-            return (safeCheckIsAir(currentPosition + movement));
+            return (safeShouldSwapGasses(currentPosition, movement));
         };
 
         if (f_checkPos(down)) 
@@ -196,6 +225,84 @@ class PixelGrid
         }
     }
 
+    bool isDenserThanTarget(int density, Vec2i target) const {
+        int targetDensity = material_properties::materialLookup[getPixelConst(target).material].density;
+        return (density > targetDensity);
+    }
+
+    bool safeShouldSwapGasses(Vec2i currentPosition, Vec2i movement) const {
+        Pixel currentPixel = getPixelConst(currentPosition);
+        Pixel targetPixel = getPixelConst(currentPosition + movement);
+        if (isInBounds(currentPosition + movement) && hasProperty(targetPixel.material, material_properties::IsLiquid)) {
+            return (isDenserThanTarget(material_properties::materialLookup[currentPixel.material].density, currentPosition + movement));
+        } else  {
+            return (safeCheckIsGas(currentPosition + movement));
+        }
+    }
+
+    maybeResult<Vec2i> generalGasMovementHorizontalDelta(Vec2i currentPosition, std::mt19937 & randomGen) const {
+        const Vec2i right = {1,0};
+        const Vec2i left = {-1,0};
+        const Vec2i right2 = 2 * right;
+        const Vec2i left2 = 2 * left; 
+
+        auto f_checkPos = [&currentPosition, this](Vec2i movement) {
+            if (!isInBounds(currentPosition + movement)) { return false; }
+
+            const Pixel& candidatePixel = getPixelConst(currentPosition + movement);
+            const Pixel& currentPixel   = getPixelConst(currentPosition);
+
+            if (currentPixel.material != candidatePixel.material && hasProperty(candidatePixel.material, material_properties::IsGas)) {
+                return true;
+            }
+            return false;
+        };
+
+        if (std::uniform_int_distribution<>(0, 1)(randomGen)) {
+            if (f_checkPos(right)) 
+            {
+                return f_checkPos(right2) ? maybeResult(right2) : maybeResult(right);
+            } 
+            else if (f_checkPos(left))
+            {
+                return f_checkPos(left2) ? maybeResult(left2) : maybeResult(left);
+            }
+        } else 
+        {
+            if (f_checkPos(left))
+            {
+                return f_checkPos(left2) ? maybeResult(left2) : maybeResult(left);
+            }
+            else if (f_checkPos(right)) 
+            {
+                return f_checkPos(right2) ? maybeResult(right2) : maybeResult(right);
+            } 
+        }
+        return maybeResult<Vec2i>();
+    }
+
+    maybeResult<Vec2i> generalGasMovementVerticalDelta(Vec2i currentPosition) const {
+        const Vec2i up = {0,-1};
+
+
+        auto f_checkPosGas = [&currentPosition, this](Vec2i movement) {
+            const Pixel& candidatePixel = getPixelConst(currentPosition + movement);
+            const Pixel& currentPixel   = getPixelConst(currentPosition);
+            return (isInBounds(currentPosition + movement) && currentPixel.material != candidatePixel.material && hasProperty(candidatePixel.material, material_properties::IsGas));
+        };
+
+        auto f_checkPosDensityUnsafe = [&currentPosition, this](Vec2i movement) {
+            const Pixel& candidatePixel = getPixelConst(currentPosition + movement);
+            const Pixel& currentPixel   = getPixelConst(currentPosition);
+
+            return (material_properties::materialLookup[currentPixel.material].density < material_properties::materialLookup[candidatePixel.material].density);
+        };
+
+        auto f_checkPos = [&f_checkPosGas, &f_checkPosDensityUnsafe](Vec2i movement) {return f_checkPosGas(movement) && f_checkPosDensityUnsafe(movement);};
+
+        return (f_checkPos(up) ? maybeResult(up) : maybeResult<Vec2i>());
+    }
+
     maybeResult<Vec2i> generalWaterPhysics(Vec2i currentPosition, std::mt19937 & randomGen) const {
         const Vec2i right = Vec2i(1,0);
         const Vec2i right2 = Vec2i(2,0);
@@ -204,7 +311,7 @@ class PixelGrid
         const Vec2i down = Vec2i(0,1);
 
         auto f_checkPos = [&currentPosition, this](Vec2i movement) {
-            return (safeCheckIsAir(currentPosition + movement));
+            return (safeCheckIsGas(currentPosition + movement));
         };
 
         bool rightClear = f_checkPos(right);
@@ -242,7 +349,7 @@ class PixelGrid
         const Vec2i down = Vec2i(0,1);
 
         auto f_checkPos = [&currentPosition, this](Vec2i movement) {
-            return (safeCheckIsAir(currentPosition + movement));
+            return (safeCheckIsGas(currentPosition + movement));
         };
 
         if (f_checkPos(down)) {
@@ -251,15 +358,17 @@ class PixelGrid
         else { return maybeResult<Vec2i>(); }
     }
 
-    const Pixel getPixelConst(Vec2i pos) const {
+    const Pixel& getPixelConst(Vec2i pos) const {
         return m_pixelGrid[pos.x][pos.y];
     }
+
+
 
     Pixel& getPixelRef(Vec2i pos) {
         return m_pixelGrid[pos.x][pos.y];
     }
 
-    maybeResult<m_IgniteAction> generalFirePhysics(Vec2i pos, std::mt19937 & randomGen) const {
+    maybeResult<m_IgniteAction> generalFireSpreadPhysics(Vec2i pos, std::mt19937 & randomGen) const {
         std::vector<Vec2i> neighborDelta = {Vec2i(1,0), Vec2i(1,-1), Vec2i(0,-1), Vec2i(-1,-1), Vec2i(-1,0), Vec2i(-1,1), Vec2i(0,1), Vec2i(1,1)};
 
         Pixel thisPixel = m_pixelGrid[pos.x][pos.y];
@@ -282,13 +391,16 @@ class PixelGrid
         return maybeResult<m_IgniteAction>();
     }
 
-    bool checkIsAir(Vec2i pos) const {
-        return (m_pixelGrid[pos.x][pos.y].material == materials::air);
+    
+
+
+    bool checkIsGas(Vec2i pos) const {
+        return (hasProperty(m_pixelGrid[pos.x][pos.y].material, material_properties::IsGas));
     };
 
-    bool safeCheckIsAir(Vec2i pos) const {
+    bool safeCheckIsGas(Vec2i pos) const {
         if (isInBounds(pos)) {
-            return checkIsAir(pos);
+            return checkIsGas(pos);
         } else {return false;};
     }
 
@@ -338,15 +450,15 @@ class PixelGrid
 
         Pixel currentPixel = m_pixelGrid[col][row];
 
+
         if (currentPixel.material == materials::air) { return; }
 
         if (currentPixel.updateFrame == m_globalUpdateFrame) { return; };
 
         Vec2i currentPos = Vec2i(col, row);
-        maybeResult<Vec2i> nextPos;
+        maybeResult<Vec2i> nextPos = maybeResult<Vec2i>();
+        maybeResult<Vec2i> nextNextPos = maybeResult<Vec2i>();
         
-        Vec2i v_nextPos;
-
         auto scopeCapturedSandPhysics = [&currentPos, this](){return this->generalSandPhysics(currentPos);};
 
         auto scopeCapturedWaterPhysics = [&randomGen, &currentPos, this](){return this->generalWaterPhysics(currentPos, randomGen);};
@@ -355,52 +467,86 @@ class PixelGrid
         maybeResult<m_IgniteAction> possibleIgnition;
 
 
+        // pixel movement doesnt change the type of pixels
         if (hasProperty(currentPixel.material, material_properties::fallingLiquid))
         {
-            nextPos = maybeResult<Vec2i>()
-                .tryWith(scopeCapturedSandPhysics)
-                .tryWith(scopeCapturedWaterPhysics);
+            nextPos = scopeCapturedSandPhysics().tryWith(scopeCapturedWaterPhysics);
+
+            currentPos = swapIfExists(currentPos, nextPos);
         }
         
         else if(hasProperty(currentPixel.material, material_properties::fallingPowder)) {
-            nextPos = maybeResult<Vec2i>()
-                .tryWith(scopeCapturedSandPhysics);
+            nextPos = scopeCapturedSandPhysics();
+
+            currentPos = swapIfExists(currentPos, nextPos);
         }
 
-        else if (hasProperty(currentPixel.material, material_properties::fixedSolid)) {
+        else if (hasProperty(currentPixel.material, material_properties::IsSolid)) {
             nextPos = maybeResult<Vec2i>(); // essentially a nothing
-        }
+            
+            currentPos = swapIfExists(currentPos, nextPos);
+        } 
 
+        else if (hasProperty(currentPixel.material, material_properties::IsGas)) {
+            nextPos = maybeResult<Vec2i>(currentPos) + generalGasMovementHorizontalDelta(currentPos, randomGen);
+
+            nextNextPos = nextPos + generalGasMovementVerticalDelta(currentPos);
+
+            currentPos = swapIfExists(currentPos, nextNextPos);
+
+            // currentPos = swapIfExists(nextPos.getValue(), nextNextPos);
+        }
         else {
             throw std::runtime_error("UnknownMaterial fix in doPhysics method of pixelgrid class in PixelGridd.hpp");
         } 
 
+        auto scopeCapturedFireSpreadPhysics= [&randomGen, &currentPos, this](){return this->generalFireSpreadPhysics(currentPos, randomGen);};
+        auto scopeCapturedIncinerationPhysics = [&currentPos, this](){return this->incinerationCheck(currentPos);};
+        auto scopeCapturedFireInteractionPhysics= = [&currentPos, this](){}; 
+
+        if (bitop::flag_has_mask(currentPixel.properties, pixel_properties::OnFire)) {
+
+            possibleIgnition = generalFireSpreadPhysics(currentPos, randomGen);
+            maybeResult<Action> fireResult = scopeCapturedIncinerationPhysics().tryWith(scopeCapturedFireInteractionPhysics).tryWith(scopeCapturedFireSpreadPhysics);
+
+            m_fireField[currentPos.x][currentPos.y].burnTime -= 1;
+
+            if ((m_fireField[currentPos.x][currentPos.y].burnTime) == 0) {
+                currentPixel = m_incineratePixel(currentPos, currentPixel);
+            } else {
+                if (possibleIgnition.exists()) {
+                    m_Ignition(possibleIgnition.getValue());
+                }
+            }
+        }
+
+        m_pixelGrid[currentPos.x][currentPos.y].updateFrame = m_globalUpdateFrame;
+    }
+
+    Vec2i swapIfExists(Vec2i currentPos, maybeResult<Vec2i> nextPos) {
+        Vec2i v_nextPos;
         if (nextPos.exists()) {
             v_nextPos = nextPos.getValue();
             swapPixels(currentPos, v_nextPos);
         } else {
             v_nextPos = currentPos;
         }
-        currentPos = v_nextPos;
+        return v_nextPos;
+    }
 
-        auto scopeCaptureFirePhysics = [&randomGen, &currentPos, this](){return this->generalFirePhysics(currentPos, randomGen);};
+    Pixel m_incineratePixel(Vec2i pos, Pixel currentPixel) {
+        uint8_t newMaterial = materials::incineration_table[currentPixel.material];
+        currentPixel.material = newMaterial;
 
-        if (bitop::flag_has_mask(currentPixel.properties, pixel_properties::OnFire)) {
-            possibleIgnition = maybeResult<m_IgniteAction>()
-                .tryWith(scopeCaptureFirePhysics);
+        setPixel({pos, currentPixel});
+        return currentPixel;
+    }
 
-            m_fireField[currentPos.x][currentPos.y].burnTime -= 1;
-            if ((m_fireField[currentPos.x][currentPos.y].burnTime) == 0) {
-                setPixel({currentPos, {0,0,0}});
-                m_fireField[currentPos.x][currentPos.y] = material_properties::nullBurnProperties;
-            } else if (possibleIgnition.exists()) {
-                m_Ignition(possibleIgnition.getValue());
-            }
-            
+    maybeResult<IncinerationAction> incinerationCheck(Vec2i pos) const {
+        if (m_fireField[pos.x][pos.y].burnTime == 0) {
+            return maybeResult<IncinerationAction>({pos, m_pixelGrid[pos.x][pos.y]});
         }
-
-
-        m_pixelGrid[currentPos.x][currentPos.y].updateFrame = m_globalUpdateFrame;
+        return maybeResult<IncinerationAction>();
     }
 
     void m_Ignition(m_IgniteAction action) {
@@ -413,8 +559,8 @@ class PixelGrid
         Pixel pixel2 = getPixelConst(pos2);
         m_pixelGrid[pos2.x][pos2.y] = m_pixelGrid[pos1.x][pos1.y];
         m_pixelGrid[pos1.x][pos1.y] = pixel2;
-        FirePixel fire2 = m_fireField[pos1.x][pos1.y];
 
+        FirePixel fire2 = m_fireField[pos2.x][pos2.y];
         m_fireField[pos2.x][pos2.y] = m_fireField[pos1.x][pos1.y];
         m_fireField[pos1.x][pos1.y] = fire2;
     }
@@ -450,22 +596,33 @@ class PixelGrid
         };
     }
 
+    void doCompositeActions(CompositeAction actions) {
+        for (Action action : actions.actions) {
+            executeAction(action);
+        }
+    }
+
+    void executeAction(Action a) {
+        if (std::holds_alternative<SetPixelAction>(a)) {
+            setPixel(std::get<SetPixelAction>(a));
+        } else if (std::holds_alternative<DrawLineAction>(a)) {
+            drawLine(std::get<DrawLineAction>(a));
+        } else if (std::holds_alternative<DrawCircle>(a)) {
+            drawCircle(std::get<DrawCircle>(a));
+        } else if (std::holds_alternative<DrawParallelogramAction>(a)) {
+            drawParallelogram(std::get<DrawParallelogramAction>(a));
+        } else if (std::holds_alternative<IgnitionAction>(a)) {
+            tryIgnitePixel(std::get<IgnitionAction>(a));
+        } else if (std::holds_alternative<CompositeAction>(a)) {
+            doCompositeActions(std::get<CompositeAction>(a));
+        }
+    }
 
     void executeActions(std::vector<Action> & actions) 
     {
         /*std::cout << "Size of queue : " << actions.size() << "\n";*/
         for (auto a = actions.begin(); a != actions.end();) {
-            if (std::holds_alternative<SetPixelAction>(*a)) {
-                setPixel(std::get<SetPixelAction>(*a));
-            } else if (std::holds_alternative<DrawLineAction>(*a)) {
-                drawLine(std::get<DrawLineAction>(*a));
-            } else if (std::holds_alternative<DrawCircle>(*a)) {
-                drawCircle(std::get<DrawCircle>(*a));
-            } else if (std::holds_alternative<DrawParallelogramAction>(*a)) {
-                drawParallelogram(std::get<DrawParallelogramAction>(*a));
-            } else if (std::holds_alternative<IgnitionAction>(*a)) {
-                tryIgnitePixel(std::get<IgnitionAction>(*a));
-            }
+            executeAction(*a);
             a = actions.erase(a);
         }
     }
@@ -484,7 +641,9 @@ class PixelGrid
         action.pixel_type.properties = pixel_properties::None;
         m_pixelGrid[action.pos.x][action.pos.y] = action.pixel_type;       
 
-        m_fireField[action.pos.x][action.pos.y] = m_nullFire;
+        material_properties::ignitionProperties newBurnProperties = material_properties::materialLookup[action.pixel_type.material].burnProperties;
+
+        m_fireField[action.pos.x][action.pos.y] = newBurnProperties;
     }
 
 

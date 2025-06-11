@@ -28,19 +28,16 @@ public:
         return this->merge(other);
     }
 
+
     maybeResult<T> operator + (const maybeResult<T> m_val2) {
         if (this->exists() && m_val2.exists()) {
-            return maybeResult(m_value + m_val2.m_value);
-        } else { return maybeResult<T>(); }
-    }
-
-    template<typename Func>
-    maybeResult<T> passThrough(Func f) {
-        if (this->exists()) {
-            maybeResult<T> result_val= f(m_value);
-            return (result_val.exists() ? result_val : *this);
+            return maybeResult(m_value + m_val2.getValue());
+        } else if (this->exists()) { 
+            return maybeResult<T>(m_value); 
+        } else if (m_val2.exists()) {
+            return maybeResult(m_val2.getValue());
         } else {
-            return *this;
+            return maybeResult<T>();
         }
     }
 
@@ -61,14 +58,14 @@ public:
         }
     }
 
-    T getValue() {
+    T getValue() const {
         if (not m_isNothing) {
             return m_value;
         } else {
             throw std::runtime_error("Trying to get the value of Nothing\n");
         }
     }
-    bool exists() {
+    bool exists() const {
         return not m_isNothing;
     }
 };

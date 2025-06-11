@@ -8,9 +8,8 @@
 #include <ostream>
 
 template <typename T>
-class Vec2
+struct Vec2
 {
-public:
     T x = 0;
     T y = 0;
 
@@ -103,6 +102,11 @@ public:
         std::cout << "(x, y) : " << x << ", " << y << "\n";
     }
 };
+
+template <typename T>
+Vec2<T> operator * (const T lhs, const Vec2<T> rhs) {
+    return Vec2<T>(lhs * rhs.x, lhs * rhs.y);
+}
 
 using Vec2f = Vec2<float>;
 using Vec2i = Vec2<int>;

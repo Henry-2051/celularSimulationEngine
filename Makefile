@@ -1,4 +1,6 @@
 # to compile and run : make run
+#
+# CXX_FLAGS := -std=c++23 -pedantic-errors -Wall -Weffc++ -Wextra -Wconversion -Wsign-conversion -O3
 
 # define compiler to use
 CXX    := g++
@@ -7,7 +9,7 @@ OS     := $(shell uname)
 
 # linux compiler / linker flags
 ifeq ($(OS), Linux)
-    CXX_FLAGS := -std=c++23 -pedantic-errors -Wall -Weffc++ -Wextra -Wconversion -Wsign-conversion -O3
+    CXX_FLAGS := -std=c++23 -pedantic-errors -Wall -Weffc++  -O2
     INCLUDES  := -I./src -I ./src/imgui -I ./src/imgui-sfml
     LDFLAGS   := -O3 -lsfml-graphics -lsfml-window -lsfml-system -lsfml-audio -lGL
 endif

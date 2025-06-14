@@ -258,19 +258,18 @@ class PixelGrid
         }
     }
 
-    maybeResult<Vec2i> generalGasMovementHorizontalDelta(Vec2i currentPosition, std::mt19937 & randomGen) const {
+    maybeResult<Vec2i> generalGasMovementHorizontalDelta(Vec2i currentPosition, std::mt19937 & randomGen, Pixel pixelToMove) const {
         const Vec2i right = {1,0};
         const Vec2i left = {-1,0};
         const Vec2i right2 = 2 * right;
         const Vec2i left2 = 2 * left; 
 
-        auto f_checkPos = [&currentPosition, this](Vec2i movement) {
+        auto f_checkPos = [&pixelToMove, &currentPosition, this](Vec2i movement) {
             if (!isInBounds(currentPosition + movement)) { return false; }
 
             const Pixel& candidatePixel = getPixelConst(currentPosition + movement);
-            const Pixel& currentPixel   = getPixelConst(currentPosition);
 
-            if (currentPixel.material != candidatePixel.material && hasProperty(candidatePixel.material, material_properties::IsGas)) {
+            if (pixelToMove.material != candidatePixel.material && hasProperty(candidatePixel.material, material_properties::IsGas)) {
                 return true;
             }
             return false;
@@ -299,21 +298,19 @@ class PixelGrid
         return maybeResult<Vec2i>();
     }
 
-    maybeResult<Vec2i> generalGasMovementVerticalDelta(Vec2i currentPosition) const {
+    maybeResult<Vec2i> generalGasMovementVerticalDelta(Vec2i currentPosition, Pixel pixelToMove) const {
         const Vec2i up = {0,-1};
 
 
-        auto f_checkPosGas = [&currentPosition, this](Vec2i movement) {
+        auto f_checkPosGas = [&pixelToMove, &currentPosition, this](Vec2i movement) {
             const Pixel& candidatePixel = getPixelConst(currentPosition + movement);
-            const Pixel& currentPixel   = getPixelConst(currentPosition);
-            return (isInBounds(currentPosition + movement) && currentPixel.material != candidatePixel.material && hasProperty(candidatePixel.material, material_properties::IsGas));
+            return (isInBounds(currentPosition + movement) && pixelToMove.material != candidatePixel.material && hasProperty(candidatePixel.material, material_properties::IsGas));
         };
 
-        auto f_checkPosDensityUnsafe = [&currentPosition, this](Vec2i movement) {
+        auto f_checkPosDensityUnsafe = [&pixelToMove, &currentPosition, this](Vec2i movement) {
             const Pixel& candidatePixel = getPixelConst(currentPosition + movement);
-            const Pixel& currentPixel   = getPixelConst(currentPosition);
 
-            return (material_properties::materialLookup[currentPixel.material].density < material_properties::materialLookup[candidatePixel.material].density);
+            return (material_properties::materialLookup[pixelToMove.material].density < material_properties::materialLookup[candidatePixel.material].density);
         };
 
         auto f_checkPos = [&f_checkPosGas, &f_checkPosDensityUnsafe](Vec2i movement) {return f_checkPosGas(movement) && f_checkPosDensityUnsafe(movement);};
@@ -537,9 +534,9 @@ class PixelGrid
         } 
 
         else if (hasProperty(currentPixel.material, material_properties::IsGas)) {
-            nextPos = maybeResult<Vec2i>(currentPos) + generalGasMovementHorizontalDelta(currentPos, randomGen);
+            nextPos = maybeResult<Vec2i>(currentPos) + generalGasMovementHorizontalDelta(currentPos, randomGen, currentPixel);
 
-            nextNextPos = nextPos + generalGasMovementVerticalDelta(currentPos);
+            nextNextPos = nextPos + generalGasMovementVerticalDelta(nextPos.getValue(), currentPixel);
 
             currentPos = swapIfExists(currentPos, nextNextPos);
 
@@ -607,6 +604,7 @@ class PixelGrid
         Pixel pixel2 = getPixelConst(pos2);
         m_pixelGrid[pos2.x][pos2.y] = m_pixelGrid[pos1.x][pos1.y];
         m_pixelGrid[pos1.x][pos1.y] = pixel2;
+        // m_pixelGrid[pos2.x][pos2.y].updateFrame = m_globalUpdateFrame;
 
         FirePixel fire2 = m_fireField[pos2.x][pos2.y];
         m_fireField[pos2.x][pos2.y] = m_fireField[pos1.x][pos1.y];

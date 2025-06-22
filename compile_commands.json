@@ -1,0 +1,24 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-c",
+      "-std=c++23",
+      "-pedantic-errors",
+      "-Wall",
+      "-Weffc++",
+      "-O3",
+      "-I./src",
+      "-I",
+      "./src/imgui",
+      "-I",
+      "./src/imgui-sfml",
+      "-o",
+      "src/Game.o",
+      "src/Game.cpp"
+    ],
+    "directory": "/home/henry/sync/codingProjects/celularSimulationEngine",
+    "file": "/home/henry/sync/codingProjects/celularSimulationEngine/src/Game.cpp",
+    "output": "/home/henry/sync/codingProjects/celularSimulationEngine/src/Game.o"
+  }
+]

@@ -1,6 +1,7 @@
 #include <SFML/Graphics/Texture.hpp>
 #include <iostream>
 #include <string>
+#include <sys/types.h>
 #include "Game.h"
 #include "Materials.h"
 #include "UserInputOptions.h"
@@ -18,9 +19,9 @@ Game::init(const std::string & path)
 {
     // TODO add code here to load config from config.txt
 
-    m_window.create(sf::VideoMode(m_windowWidth, m_windowHeight),
+    m_window.create(sf::VideoMode(static_cast<u_int>(m_windowWidth), static_cast<uint>(m_windowHeight)),
                     "Falling sand sim");
-    m_window.setFramerateLimit(m_fps);
+    m_window.setFramerateLimit(static_cast<u_int>(m_fps));
 
     ImGui::SFML::Init(m_window);
 
@@ -28,7 +29,7 @@ Game::init(const std::string & path)
     ImGui::GetIO().FontGlobalScale = 2.0f;
     /*m_pixelGrid = PixelGrid(m_windowWidth / m_scale, m_windowHeight / m_scale);*/
 
-    m_texture.create(m_width, m_height);
+    m_texture.create(static_cast<u_int>(m_width), static_cast<u_int>(m_height));
 
     /*std::cout << "Making sprite\n";*/
     // Create a sprite to display the texture
@@ -86,7 +87,7 @@ Game::paintBrush()
 {
     if (m_left_button_pressed) {
         sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
-        Vec2i simulationPos = pixelPos / m_scale;
+        Vec2st simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
         Vec2i previousSimulationPos = m_previousMousePos / m_scale;
         Action userAction = DrawLineAction{previousSimulationPos, simulationPos, m_paintBrushWidth-1, m_drawPixelType};
         m_pixelGrid.userAction(userAction);
@@ -98,14 +99,16 @@ Game::tryIgnite()
 {
     if (m_left_button_pressed) {
         sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
-        Action userAction = IgnitionAction{pixelPos / m_scale};
+        Vec2st simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
+        Action userAction = IgnitionAction{simulationPos};
         m_pixelGrid.userAction(userAction);
     }
 }
 void
 Game::holdAndDragLine() 
 {
-    Vec2i simulationPos = sf::Mouse::getPosition(m_window) / m_scale;
+    sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
+    Vec2st simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
     if (hasUserLeftClicked()) {
         m_dragLineStartSimulationPos = simulationPos; 
     } else if (hasUserLeftReleased()) {
@@ -131,7 +134,8 @@ Game::drawCircle()
 {
     if (hasUserLeftClicked()) 
     {
-        Vec2i simulationPos = sf::Mouse::getPosition(m_window) / m_scale;
+        sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
+        Vec2st simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
         Action userAction = DrawCircle{simulationPos, m_drawCircleRadius, m_drawPixelType};
         m_pixelGrid.userAction(userAction);
     }
@@ -140,7 +144,9 @@ Game::drawCircle()
 void
 Game::drawParallelogram()
 {
-    Vec2i simulationPos = sf::Mouse::getPosition(m_window) / m_scale;
+    sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
+    Vec2st simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
+
     if (hasUserLeftClicked()) {
         if (m_currentParallelogramState == WaitingForStart) {
             m_firstParallelogramPoint = simulationPos;
@@ -237,15 +243,15 @@ Game::sGui()
 
     if (ImGui::TreeNode("Material selection")) {
         if (ImGui::BeginListBox("")) {
-            static int itemSelectedIDX = 1;
+            static size_t itemSelectedIDX = 1;
             int itemHighlightedIDX = -1;
-            for (int i = 0; i < sizeof(materials::materialNames) / sizeof(materials::materialNames[0]); i++) {
+            for (size_t i = 0; i < sizeof(materials::materialNames) / sizeof(materials::materialNames[0]); i++) {
                 const bool isSlected = (itemSelectedIDX == i);
                 if (ImGui::Selectable(materials::materialNames[i], isSlected)) {
                     itemSelectedIDX = i;
                 }
                 if (ImGui::IsItemHovered()) {
-                    itemHighlightedIDX = i;
+                    itemHighlightedIDX = static_cast<int>(i);
                 }
                 if (isSlected) {
                     ImGui::SetItemDefaultFocus();
@@ -259,15 +265,15 @@ Game::sGui()
         }
     if (ImGui::TreeNode("Draw method selection")) {
         if (ImGui::BeginListBox("")) {
-            static int drawingMethodSelectedIDX = 0;
+            static size_t drawingMethodSelectedIDX = 0;
             int drawingMethodHighlightedIDX = -1;
-            for (int i = 0; i < sizeof(inputModes::inputModeNames) / sizeof(inputModes::inputModeNames[0]); i++) {
+            for (size_t i = 0; i < sizeof(inputModes::inputModeNames) / sizeof(inputModes::inputModeNames[0]); i++) {
                 const bool isSelected = (i == drawingMethodSelectedIDX);
                 if (ImGui::Selectable(inputModes::inputModeNames[i], isSelected)) {
                     drawingMethodSelectedIDX = i;
                 }
                 if (ImGui::IsItemHovered()) {
-                    drawingMethodHighlightedIDX = i;
+                    drawingMethodHighlightedIDX = static_cast<int>(i);
                 }
                 if (isSelected) {
                     ImGui::SetItemDefaultFocus();

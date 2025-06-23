@@ -3,6 +3,7 @@
 // #include "imgui-SFML.h"
 #include <SFML/Config.hpp>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 // #include <iostream>
 // #include <memory>
@@ -15,6 +16,7 @@
 #include <vector>
 #include "BitOperationHelpers.hpp"
 #include "maybeResult.hpp"
+#include "PixelGridContainer.hpp"
 
 struct SetPixelAction;
 
@@ -50,30 +52,30 @@ using FirePixel = material_properties::ignitionProperties;
 
 struct SetPixelAction
 {
-    Vec2st pos;
+    Vec2i pos;
     Pixel pixel_type;
 };
 
 struct DrawCircle
 {
-    Vec2st pos;
+    Vec2i pos;
     int radius;
     Pixel pixel_type;
 };
 
 struct DrawLineAction
 {
-    Vec2st start;
-    Vec2st end;
+    Vec2i start;
+    Vec2i end;
     int width;
     Pixel pixel_type;
 };
 
 struct DrawParallelogramAction
 {
-    Vec2st cornerTL;
-    Vec2st cornerTR;
-    Vec2st cornerBL;
+    Vec2i cornerTL;
+    Vec2i cornerTR;
+    Vec2i cornerBL;
     Pixel pixel_type;
 };
 
@@ -81,21 +83,21 @@ struct DrawParallelogramAction
 struct m_IgniteAction
 {
     FirePixel fireProperties;
-    Vec2st     pos;
+    Vec2i     pos;
 };
 
 struct IgnitionAction {
-    Vec2st pos;
+    Vec2i pos;
 };
 
 struct IncinerationAction {
-    Vec2st pos;
+    Vec2i pos;
     Pixel pixel;
 };
 
 
 struct SetPixelMaterialAndProperties{
-    Vec2st pos;
+    Vec2i pos;
     uint8_t material;
     uint8_t properties;
 };
@@ -124,12 +126,12 @@ const sf::Color MetalGray(127, 128, 128);           // Metal surfaces
 
 class PixelGrid
 {
-    std::vector<std::vector<Pixel>>     m_pixelGrid;
-    std::vector<std::vector<Vec2f>>     m_velocityField;
-    std::vector<std::vector<FirePixel>> m_fireField;
+    PixelGridContainer<Pixel>     m_pixelGrid;
+    PixelGridContainer<Vec2f>     m_velocityField;
+    PixelGridContainer<FirePixel> m_fireField;
 
-    size_t m_gridWidth;
-    size_t m_gridHeight;
+    int m_gridWidth;
+    int m_gridHeight;
     std::vector<SetPixelAction> m_SetPixelQueue;
     std::vector<sf::Uint8> m_buffer;
 
@@ -139,11 +141,9 @@ class PixelGrid
     FirePixel m_nullFire = material_properties::nullBurnProperties;
 
 
-
     std::random_device rd; 
 
     uint8_t m_globalUpdateFrame = 0;
-
 
 
     // Define colors per material in RGBA, 4 bytes per material
@@ -190,7 +190,7 @@ class PixelGrid
 
 
 
-    bool isInBounds(Vec2st pos) const {
+    bool isInBounds(Vec2i pos) const {
         if (pos.x < 0 || pos.x >= m_gridWidth) {
             /*pos.print();*/
             return false;
@@ -243,16 +243,21 @@ class PixelGrid
 
     bool isDenserThanTarget(int density, Vec2i target) const {
         int targetDensity = material_properties::materialLookup[getPixelConst(target).material].density;
+
         return (density > targetDensity);
     }
 
     bool safeShouldSwapGasses(Vec2i currentPosition, Vec2i movement) const {
+        if(!isInBounds(currentPosition + movement)){
+            return false;
+        };
+
         Pixel currentPixel = getPixelConst(currentPosition);
         Pixel targetPixel = getPixelConst(currentPosition + movement);
-        if (isInBounds(currentPosition + movement) && hasProperty(targetPixel.material, material_properties::IsLiquid)) {
+        if (hasProperty(targetPixel.material, material_properties::IsLiquid)) {
             return (isDenserThanTarget(material_properties::materialLookup[currentPixel.material].density, currentPosition + movement));
-        } else  {
-            return (safeCheckIsGas(currentPosition + movement));
+        } else {
+            return (checkIsGas(currentPosition + movement));
         }
     }
 
@@ -371,17 +376,17 @@ class PixelGrid
         else { return maybeResult<Vec2i>(); }
     }
 
-    const Pixel& getPixelConst(Vec2st pos) const {
+    const Pixel& getPixelConst(Vec2i pos) const {
         return m_pixelGrid[pos.x][pos.y];
     }
 
 
 
-    Pixel& getPixelRef(Vec2st pos) {
+    Pixel& getPixelRef(Vec2i pos) {
         return m_pixelGrid[pos.x][pos.y];
     }
 
-    maybeResult<ActionIncludingPair> generalFireSpreadPhysics(Vec2st pos, std::mt19937 & randomGen) const {
+    maybeResult<ActionIncludingPair> generalFireSpreadPhysics(Vec2i pos, std::mt19937 & randomGen) const {
         std::vector<Vec2i> neighborDelta = {Vec2i(1,0), Vec2i(1,-1), Vec2i(0,-1), Vec2i(-1,-1), Vec2i(-1,0), Vec2i(-1,1), Vec2i(0,1), Vec2i(1,1)};
 
         Pixel thisPixel = m_pixelGrid[pos.x][pos.y];
@@ -420,12 +425,12 @@ class PixelGrid
         return neighbors;
      }
     
-    maybeResult<ActionIncludingPair> generalFireInteractionPhysics(Vec2st pos) {
+    maybeResult<ActionIncludingPair> generalFireInteractionPhysics(Vec2i pos) {
         std::array<Vec2i, 48> neighbors = neighboringDeltas();
 
         Pixel thisPixel = m_pixelGrid[pos.x][pos.y];
         for (Vec2i neighborDelta : neighbors) {
-            Vec2st targetPos= neighborDelta + pos;
+            Vec2i targetPos= neighborDelta + pos;
             if(!isInBounds(targetPos)) {continue;};
             Pixel targetPixel = m_pixelGrid[targetPos.x][targetPos.y];
             auto reaction = material_reactions::on_fire_reactions.find(std::pair(thisPixel.material, targetPixel.material));
@@ -439,7 +444,7 @@ class PixelGrid
     }
 
 
-    bool checkIsGas(Vec2st pos) const {
+    bool checkIsGas(Vec2i pos) const {
         return (hasProperty(m_pixelGrid[pos.x][pos.y].material, material_properties::IsGas));
     };
 
@@ -458,25 +463,25 @@ class PixelGrid
         bool n2 = bitop::check_nth_bit(m_globalUpdateFrame, 1);
         std::mt19937 randomGen(rd());
         if (bitop::check_nth_bit(m_globalUpdateFrame, 0)) {
-            for (size_t xi = 0; xi < m_gridWidth; xi++) {
+            for (int xi = 0; xi < m_gridWidth; xi++) {
                 if (n2) {
-                    for (size_t yi = 0; yi < m_gridHeight; yi ++) {
+                    for (int yi = 0; yi < m_gridHeight; yi ++) {
                         doPhysicsOnPixel(xi, yi, randomGen);
                     }
                 } else {
-                    for (size_t yi = m_gridHeight - 1; yi !=0; yi --) {
+                    for (int yi = m_gridHeight - 1; yi !=0; yi --) {
                         doPhysicsOnPixel(xi,yi, randomGen);
                     }
                 }
             }
         } else {
-            for (size_t xi = m_gridWidth - 1; xi !=0; xi --) {
+            for (int xi = m_gridWidth - 1; xi !=0; xi --) {
                 if (n2) {
-                    for (size_t yi = 0; yi < m_gridHeight; yi ++) {
+                    for (int yi = 0; yi < m_gridHeight; yi ++) {
                         doPhysicsOnPixel(xi,yi, randomGen);
                     }
                 } else {
-                    for (size_t yi = m_gridHeight - 1; yi !=0; yi --) {
+                    for (int yi = m_gridHeight - 1; yi !=0; yi --) {
                         doPhysicsOnPixel(xi,yi, randomGen);
                     }
                 }
@@ -484,7 +489,7 @@ class PixelGrid
         }
     }
 
-    void doPhysicsOnPixel(size_t col, size_t row, std::mt19937 & randomGen)
+    void doPhysicsOnPixel(int col, int row, std::mt19937 & randomGen)
     {
         // the pixel must have a path to move through if it moves diagonally
         // othersie it seemingly phases through containers
@@ -500,7 +505,7 @@ class PixelGrid
 
         if (currentPixel.updateFrame == m_globalUpdateFrame) { return; };
 
-        Vec2st currentPos = Vec2st(col, row);
+        Vec2i currentPos = Vec2i(col, row);
         maybeResult<Vec2i> nextPos = maybeResult<Vec2i>();
         maybeResult<Vec2i> nextNextPos = maybeResult<Vec2i>();
         
@@ -585,7 +590,7 @@ class PixelGrid
         setPixel({action.pos, currentPixel}); 
     }
 
-    maybeResult<ActionIncludingPair> incinerationCheck(Vec2st pos) const {
+    maybeResult<ActionIncludingPair> incinerationCheck(Vec2i pos) const {
         if (m_fireField[pos.x][pos.y].burnTime == 0) {
             return maybeResult<IncinerationAction>({pos, m_pixelGrid[pos.x][pos.y]});
         }
@@ -598,8 +603,11 @@ class PixelGrid
         m_fireField[action.pos.x][action.pos.y] = action.fireProperties;
     }
 
-    void swapPixels(Vec2st pos1, Vec2st pos2) {
+    void swapPixels(Vec2i pos1, Vec2i pos2) {
         Pixel pixel2 = getPixelConst(pos2);
+        if(!isInBounds(pos1) || !isInBounds(pos2)) {
+            throw std::runtime_error("trying to swap not in bounds");
+        }
         m_pixelGrid[pos2.x][pos2.y] = m_pixelGrid[pos1.x][pos1.y];
         m_pixelGrid[pos1.x][pos1.y] = pixel2;
         // m_pixelGrid[pos2.x][pos2.y].updateFrame = m_globalUpdateFrame;
@@ -624,8 +632,8 @@ class PixelGrid
         // TODO overload the function to take a config file name
         // and load all the pixels from that config file
         // currently this sets all the pixels to air 
-        m_pixelGrid.assign(m_gridWidth, std::vector<Pixel>(m_gridHeight, Pixel{materials::air, 0, 0}));
-        m_fireField.assign(m_gridWidth, std::vector<FirePixel>(m_gridHeight, m_nullFire));
+        m_pixelGrid = PixelGridContainer<Pixel>(m_gridWidth, m_gridHeight, Pixel{materials::air, 0, 0});
+        m_fireField = PixelGridContainer<FirePixel>(m_gridWidth, m_gridHeight, m_nullFire);
     }
     
     void tryIgnitePixel(IgnitionAction action) {
@@ -789,12 +797,12 @@ class PixelGrid
 
     void updateDrawBuffer()
     {
-        m_buffer.assign(m_gridWidth * m_gridHeight * 4, 0);
-        for (size_t i = 0; i < m_gridWidth; i++) 
+        m_buffer.assign(static_cast<size_t>(m_gridWidth * m_gridHeight * 4), static_cast<size_t>(0));
+        for (size_t i = 0; i < static_cast<size_t>(m_gridWidth); i++) 
         {
-            for (size_t j = 0; j < m_gridHeight; j ++)
+            for (size_t j = 0; j < static_cast<size_t>(m_gridHeight); j ++)
             {
-                size_t q =  (j * m_gridWidth + i);
+                size_t q =  (j * static_cast<size_t>(m_gridWidth) + i);
                 size_t p = q * 4;
                 if ((! bitop::flag_has_mask(m_pixelGrid[i][j].properties, pixel_properties::OnFire)) || (m_pixelGrid[i][j].material == materials::lava)) {
                     m_buffer[p  ] = m_materialToColor_c[4 * m_pixelGrid[i][j].material];
@@ -815,21 +823,21 @@ class PixelGrid
 public:
     PixelGrid() : m_gridWidth(0), m_gridHeight(0) {}
 
-    PixelGrid(size_t width, size_t height) 
+    PixelGrid(int width, int height) 
         : m_gridWidth(width), m_gridHeight(height),
-        m_buffer(width * height * 4)
+        m_buffer(static_cast<size_t>(width * height * 4))
     {
         init();
     }
 
-    void reset(size_t width, size_t height) 
-    {
-        m_gridWidth = width;
-        m_gridHeight = height;
-        m_buffer.resize(width * height * 4);
-
-        init();
-    }
+    // void reset(int width, int height) 
+    // {
+    //     m_gridWidth = width;
+    //     m_gridHeight = height;
+    //     m_buffer.resize(width * height * 4);
+    //
+    //     init();
+    // }
 
 
     void update()

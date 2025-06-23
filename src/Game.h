@@ -36,9 +36,9 @@ class Game
     
     std::chrono::steady_clock::time_point previousTime;
     int m_fps                = 10000;
-    size_t m_scale              = 4;
-    size_t m_width = 320 * 2;
-    size_t m_height = 180 * 2;
+    int m_scale              = 4;
+    int m_width = 320 * 2;
+    int m_height = 180 * 2;
     int m_frameCount = 1;
 
     bool m_running = true;
@@ -46,8 +46,8 @@ class Game
     bool m_left_button_pressed = false;
     bool m_prev_left_button_pressed= false;
 
-    size_t m_windowHeight       =m_height* m_scale;
-    size_t m_windowWidth        =m_width *m_scale;
+    int m_windowHeight       =m_height* m_scale;
+    int m_windowWidth        =m_width *m_scale;
 
     sf::Texture m_texture;
     sf::Sprite m_sprite;
@@ -60,7 +60,7 @@ class Game
     int m_drawLineWidth = 1;
     int m_drawCircleRadius = 4;
     bool m_holdAction = false;
-    Vec2st m_previousMousePos = Vec2st{m_width / 2, m_height / 2};
+    Vec2i m_previousMousePos = Vec2i{m_width / 2, m_height / 2};
     int m_paintBrushWidth = 1;
 
     Vec2i m_dragLineStartSimulationPos = m_previousMousePos / m_scale; 

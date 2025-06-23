@@ -87,9 +87,9 @@ Game::paintBrush()
 {
     if (m_left_button_pressed) {
         sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
-        Vec2st simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
+        Vec2i simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
         Vec2i previousSimulationPos = m_previousMousePos / m_scale;
-        Action userAction = DrawLineAction{previousSimulationPos, simulationPos, m_paintBrushWidth-1, m_drawPixelType};
+        ActionIncludingPair userAction = DrawLineAction{previousSimulationPos, simulationPos, m_paintBrushWidth-1, m_drawPixelType};
         m_pixelGrid.userAction(userAction);
     }
 }
@@ -99,8 +99,8 @@ Game::tryIgnite()
 {
     if (m_left_button_pressed) {
         sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
-        Vec2st simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
-        Action userAction = IgnitionAction{simulationPos};
+        Vec2i simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
+        ActionIncludingPair userAction = IgnitionAction{simulationPos};
         m_pixelGrid.userAction(userAction);
     }
 }
@@ -108,11 +108,11 @@ void
 Game::holdAndDragLine() 
 {
     sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
-    Vec2st simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
+    Vec2i simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
     if (hasUserLeftClicked()) {
         m_dragLineStartSimulationPos = simulationPos; 
     } else if (hasUserLeftReleased()) {
-        Action userAction = DrawLineAction{m_dragLineStartSimulationPos, simulationPos, m_drawLineWidth, m_drawPixelType};
+        ActionIncludingPair userAction = DrawLineAction{m_dragLineStartSimulationPos, simulationPos, m_drawLineWidth, m_drawPixelType};
         m_pixelGrid.userAction(userAction);
     }
 }
@@ -135,8 +135,8 @@ Game::drawCircle()
     if (hasUserLeftClicked()) 
     {
         sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
-        Vec2st simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
-        Action userAction = DrawCircle{simulationPos, m_drawCircleRadius, m_drawPixelType};
+        Vec2i simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
+        ActionIncludingPair userAction = DrawCircle{simulationPos, m_drawCircleRadius, m_drawPixelType};
         m_pixelGrid.userAction(userAction);
     }
 }
@@ -145,7 +145,7 @@ void
 Game::drawParallelogram()
 {
     sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
-    Vec2st simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
+    Vec2i simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
 
     if (hasUserLeftClicked()) {
         if (m_currentParallelogramState == WaitingForStart) {
@@ -166,7 +166,7 @@ Game::drawParallelogram()
 
     if (m_currentParallelogramState == DrawingShape) {
         m_currentParallelogramState = WaitingForStart;
-        Action action = DrawParallelogramAction{m_firstParallelogramPoint, m_secondParallelogramPoint, m_thirdParallelogramPoint, m_drawPixelType};
+        ActionIncludingPair action = DrawParallelogramAction{m_firstParallelogramPoint, m_secondParallelogramPoint, m_thirdParallelogramPoint, m_drawPixelType};
         m_pixelGrid.userAction(action);
     }
 }

@@ -1,0 +1,14 @@
+* Instructions
+  ~ Create and enter a build directory (if you don’t have one already):
+mkdir build && cd build
+  ~ Configure the project with your desired build type. For example, for a debug build:
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+   Or for a release build:
+cmake -DCMAKE_BUILD_TYPE=Release ..
+  ~ Build the main application:
+cmake --build .
+  ~ Run the application using your custom target:
+cmake --build . --target run
+  ~ To build and run unit tests, simply execute:
+ctest
+

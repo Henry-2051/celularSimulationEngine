@@ -10,3 +10,4 @@ CompileFlags:
     - "-O3"
     - "-I./imgui"
     - "-I./imgui-sfml"
+    - "-I./Catch2"

@@ -7,6 +7,7 @@
 #include <cstdint>
 // #include <iostream>
 // #include <memory>
+#include <iostream>
 #include <random>
 #include <stdexcept>
 #include <strings.h>
@@ -17,6 +18,7 @@
 #include "BitOperationHelpers.hpp"
 #include "maybeResult.hpp"
 #include "PixelGridContainer.hpp"
+
 
 struct SetPixelAction;
 
@@ -306,8 +308,11 @@ class PixelGrid
 
 
         auto f_checkPosGas = [&pixelToMove, &currentPosition, this](Vec2i movement) {
+            if (!isInBounds(currentPosition + movement)) {
+                return false;
+            }
             const Pixel& candidatePixel = getPixelConst(currentPosition + movement);
-            return (isInBounds(currentPosition + movement) && pixelToMove.material != candidatePixel.material && hasProperty(candidatePixel.material, material_properties::IsGas));
+            return (pixelToMove.material != candidatePixel.material && hasProperty(candidatePixel.material, material_properties::IsGas));
         };
 
         auto f_checkPosDensityUnsafe = [&pixelToMove, &currentPosition, this](Vec2i movement) {
@@ -451,7 +456,8 @@ class PixelGrid
     bool safeCheckIsGas(Vec2i pos) const {
         if (isInBounds(pos)) {
             return checkIsGas(pos);
-        } else {return false;};
+        } 
+        return false;
     }
 
     bool hasProperty(uint8_t material, material_properties::PixelFlags property) const {

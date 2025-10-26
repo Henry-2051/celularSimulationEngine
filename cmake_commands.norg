@@ -1,14 +1,24 @@
-* Instructions
-  ~ Create and enter a build directory (if you don’t have one already):
-mkdir build && cd build
-  ~ Configure the project with your desired build type. For example, for a debug build:
-cmake -DCMAKE_BUILD_TYPE=Debug ..
-   Or for a release build:
-cmake -DCMAKE_BUILD_TYPE=Release ..
-  ~ Build the main application:
-cmake --build .
-  ~ Run the application using your custom target:
-cmake --build . --target run
-  ~ To build and run unit tests, simply execute:
-ctest
 
+@code bash
+mkdir -p build
+cd build
+
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+
+# cmake -DCMAKE_BUILD_TYPE=Release ..
+
+cmake --build .    # this calls make . by default on Unix, or MSBuild/Ninja on other platforms
+
+ctest --output-on-failure
+
+../bin/sfmlgame
+@end
+
+* One line build and run   
+  ---
+
+@code lang
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  && cmake --build build \
+  && ./bin/sfmlgame
+@end

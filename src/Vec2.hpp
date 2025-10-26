@@ -111,3 +111,4 @@ Vec2<T> operator * (const T lhs, const Vec2<T> rhs) {
 
 using Vec2f = Vec2<float>;
 using Vec2i = Vec2<int>;
+using Vec2st= Vec2<std::size_t> ;

@@ -49,7 +49,6 @@ class PixelGridContainer
       : m_width(static_cast<size_t>(m_width))
       , m_height(static_cast<size_t>(m_height))
     {
-
         std::cout << "width and height " << m_width << ", " << m_height << "\n";
         m_pixelGrid.assign(m_width * m_height, initial);
         for (size_t i = 0; i < m_width; ++i) {

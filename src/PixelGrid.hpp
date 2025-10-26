@@ -19,7 +19,6 @@
 #include "maybeResult.hpp"
 #include "PixelGridContainer.hpp"
 
-
 struct SetPixelAction;
 
 struct DrawCircle;
@@ -43,6 +42,7 @@ struct SetPixelMaterialAndProperties;
 using Action = std::variant<SetPixelAction, DrawCircle, DrawLineAction, DrawParallelogramAction, IgnitionAction, IncinerationAction, m_IgniteAction, SetPixelMaterialAndProperties>;
 
 using ActionIncludingPair = std::variant<Action, ActionPair>;
+
 struct Pixel 
 {
     uint8_t material;
@@ -135,7 +135,7 @@ class PixelGrid
     int m_gridWidth;
     int m_gridHeight;
     std::vector<SetPixelAction> m_SetPixelQueue;
-    std::vector<sf::Uint8> m_buffer;
+    std::vector<std::uint8_t> m_buffer;
 
     std::vector<ActionIncludingPair> m_actionQueue;
 
@@ -188,7 +188,7 @@ class PixelGrid
         28, 18, 15, 255,
     };
 
-    std::vector<sf::Uint8> m_fireColor = {189, 84, 40, 180};
+    std::vector<std::uint8_t> m_fireColor = {189, 84, 40, 180};
 
 
 
@@ -627,6 +627,11 @@ class PixelGrid
     {
         initRandom();
         initGrid();
+        initDrawBuffer();
+    }
+
+    void initDrawBuffer() {
+        m_buffer.assign(static_cast<size_t>(m_gridWidth * m_gridHeight * 4), static_cast<size_t>(0));
     }
 
     void initRandom()
@@ -803,13 +808,13 @@ class PixelGrid
 
     void updateDrawBuffer()
     {
-        m_buffer.assign(static_cast<size_t>(m_gridWidth * m_gridHeight * 4), static_cast<size_t>(0));
         for (size_t i = 0; i < static_cast<size_t>(m_gridWidth); i++) 
         {
             for (size_t j = 0; j < static_cast<size_t>(m_gridHeight); j ++)
             {
                 size_t q =  (j * static_cast<size_t>(m_gridWidth) + i);
                 size_t p = q * 4;
+                // if its not on fire and is not lava
                 if ((! bitop::flag_has_mask(m_pixelGrid[i][j].properties, pixel_properties::OnFire)) || (m_pixelGrid[i][j].material == materials::lava)) {
                     m_buffer[p  ] = m_materialToColor_c[4 * m_pixelGrid[i][j].material];
                     m_buffer[p+1] = m_materialToColor_c[4 * m_pixelGrid[i][j].material + 1];
@@ -866,5 +871,9 @@ public:
 
     auto& getPixels() {
         return m_buffer;
+    }
+
+    const std::vector<uint8_t>& getWindowView(Vec2i corner, Vec2i boxSize) {
+        
     }
 };

@@ -1,0 +1,1 @@
+/nix/store/al7l1c2nwk9c9cicp3l7jfjxi1vilp93-clang-wrapper-21.1.2/bin/clang++ -g -Xlinker --dependency-file=CMakeFiles/unit_tests.dir/link.d CMakeFiles/unit_tests.dir/test_main.cpp.o -o unit_tests  ../_deps/catch2-build/src/libCatch2Maind.a -lsfml-graphics -lsfml-window -lsfml-system -lsfml-audio -lGL ../_deps/catch2-build/src/libCatch2d.a

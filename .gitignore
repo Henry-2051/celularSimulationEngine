@@ -1,0 +1,72 @@
+# ===== Visual Studio / Visual C++ =====
+*.user
+*.suo
+*.vcxproj.*
+*.vcproj*
+*.ncb
+*.sdf
+*.opensdf
+*.pch
+*_i.c
+*_p.c
+*.idb
+*.ilk
+*.log
+*.lastbuildstate
+[Bb]uild/
+[Bb]in/
+[Dd]ebug*/
+[Rr]elease*/
+
+# ===== CMake =====
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+install_manifest.txt
+
+# ===== Unix / Make =====
+*.o
+*.obj
+*.so
+*.a
+*.lo
+*.la
+*.lai
+*.tmp
+
+# ===== Executables and intermediate =====
+*.exe
+*.dll
+*.lib
+*.app
+*.dSYM/
+*.out
+*.ilk
+
+# ===== SFML / OpenGL shaders (optional) =====
+# If you precompile or generate shader binaries, ignore them:
+*.spv
+*.bin
+
+# ===== IDEs & Editors =====
+.vscode/
+.idea/
+*.code-workspace
+
+# ===== macOS =====
+.DS_Store
+
+# ===== Windows =====
+Thumbs.db
+desktop.ini
+
+# ===== Logs & temp files =====
+*.log
+*.tmp
+*~
+
+# ===== Packs & archives =====
+*.zip
+*.tar.gz
+*.rar

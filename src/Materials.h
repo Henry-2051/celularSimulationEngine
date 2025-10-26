@@ -182,6 +182,7 @@ struct material_property_pair {
     uint8_t material;
     uint8_t properties;
 };
+// material 1 is on fire and is adjacent to material 2
 inline std::map<std::pair<uint8_t, uint8_t>, std::pair<material_property_pair, material_property_pair>> on_fire_reactions {
         {   
             {materials::oil, materials::water}, 

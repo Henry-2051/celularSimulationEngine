@@ -334,9 +334,20 @@ Game::sGui()
         }
 
         ImGui::TreePop();
-    } 
+    }
 
+    if (ImGui::TreeNode("Window movement")) {
+        ImGui::DragInt2("Window position", (int*)&m_windowPosition);
 
-
+        float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+        ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true);
+        if (ImGui::ArrowButton("##left", ImGuiDir_Left)) { m_scale--; }
+        ImGui::SameLine(0.0f, spacing);
+        if (ImGui::ArrowButton("##right", ImGuiDir_Right)) { m_scale++; }
+        ImGui::PopItemFlag();
+        ImGui::SameLine();
+        ImGui::Text("%d", m_scale);
+        ImGui::TreePop();
+    }
     ImGui::End();
 }

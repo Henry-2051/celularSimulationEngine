@@ -10,8 +10,10 @@ set(CMAKE_MAKEFILE_DEPENDS
   "CMakeFiles/4.1.2/CMakeSystem.cmake"
   "CMakeLists.txt"
   "catch2-populate-prefix/tmp/catch2-populate-mkdirs.cmake"
+  "/nix/store/5bn5f4ivqf4xn19khh4kcg4ngnjs6spg-cmake-4.1.2/share/cmake-4.1/Modules/CMakeDetermineSystem.cmake"
   "/nix/store/5bn5f4ivqf4xn19khh4kcg4ngnjs6spg-cmake-4.1.2/share/cmake-4.1/Modules/CMakeGenericSystem.cmake"
   "/nix/store/5bn5f4ivqf4xn19khh4kcg4ngnjs6spg-cmake-4.1.2/share/cmake-4.1/Modules/CMakeInitializeConfigs.cmake"
+  "/nix/store/5bn5f4ivqf4xn19khh4kcg4ngnjs6spg-cmake-4.1.2/share/cmake-4.1/Modules/CMakeSystem.cmake.in"
   "/nix/store/5bn5f4ivqf4xn19khh4kcg4ngnjs6spg-cmake-4.1.2/share/cmake-4.1/Modules/CMakeSystemSpecificInformation.cmake"
   "/nix/store/5bn5f4ivqf4xn19khh4kcg4ngnjs6spg-cmake-4.1.2/share/cmake-4.1/Modules/CMakeSystemSpecificInitialize.cmake"
   "/nix/store/5bn5f4ivqf4xn19khh4kcg4ngnjs6spg-cmake-4.1.2/share/cmake-4.1/Modules/ExternalProject.cmake"
@@ -36,6 +38,7 @@ set(CMAKE_MAKEFILE_OUTPUTS
 
 # Byproducts of CMake generate step:
 set(CMAKE_MAKEFILE_PRODUCTS
+  "CMakeFiles/4.1.2/CMakeSystem.cmake"
   "catch2-populate-prefix/tmp/catch2-populate-mkdirs.cmake"
   "catch2-populate-prefix/tmp/catch2-populate-gitclone.cmake"
   "catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-gitinfo.txt"

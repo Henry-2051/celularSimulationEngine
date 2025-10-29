@@ -1,0 +1,7 @@
+renderingEngine OpenGL
+gridWidth 1600
+gridHeight 900
+fps 60
+scale 1
+windowWidth 1600
+windowHeight 900

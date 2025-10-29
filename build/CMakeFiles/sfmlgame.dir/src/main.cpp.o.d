@@ -397,4 +397,15 @@ CMakeFiles/sfmlgame.dir/src/main.cpp.o: \
   /home/quartz/sync/codingProjects/celularSimulationEngine/src/debugAssert.hpp \
   /nix/store/ffrg0560kj0066s4k9pznjand907nlnz-gcc-14.3.0/include/c++/14.3.0/cassert \
   /nix/store/0vqrw0y515015i3065r9s00jcp1cd4hy-glibc-2.40-66-dev/include/assert.h \
-  /home/quartz/sync/codingProjects/celularSimulationEngine/src/UserInputOptions.h
+  /home/quartz/sync/codingProjects/celularSimulationEngine/src/action_types.h \
+  /home/quartz/sync/codingProjects/celularSimulationEngine/src/UserInputOptions.h \
+  /home/quartz/sync/codingProjects/celularSimulationEngine/src/configHelp.h \
+  /home/quartz/sync/codingProjects/celularSimulationEngine/src/globalConfig.h \
+  /nix/store/ffrg0560kj0066s4k9pznjand907nlnz-gcc-14.3.0/include/c++/14.3.0/functional \
+  /nix/store/ffrg0560kj0066s4k9pznjand907nlnz-gcc-14.3.0/include/c++/14.3.0/bits/std_function.h \
+  /nix/store/ffrg0560kj0066s4k9pznjand907nlnz-gcc-14.3.0/include/c++/14.3.0/unordered_map \
+  /nix/store/ffrg0560kj0066s4k9pznjand907nlnz-gcc-14.3.0/include/c++/14.3.0/bits/unordered_map.h \
+  /nix/store/ffrg0560kj0066s4k9pznjand907nlnz-gcc-14.3.0/include/c++/14.3.0/bits/hashtable.h \
+  /nix/store/ffrg0560kj0066s4k9pznjand907nlnz-gcc-14.3.0/include/c++/14.3.0/bits/hashtable_policy.h \
+  /nix/store/ffrg0560kj0066s4k9pznjand907nlnz-gcc-14.3.0/include/c++/14.3.0/bits/move_only_function.h \
+  /nix/store/ffrg0560kj0066s4k9pznjand907nlnz-gcc-14.3.0/include/c++/14.3.0/bits/mofunc_impl.h

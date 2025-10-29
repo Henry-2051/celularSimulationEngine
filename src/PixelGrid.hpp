@@ -5,10 +5,10 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-// #include <iostream>
-// #include <memory>
 #include <iostream>
+// #include <memory>
 #include <random>
+#include <iostream>
 #include <stdexcept>
 #include <strings.h>
 #include <sys/types.h>
@@ -18,96 +18,9 @@
 #include "BitOperationHelpers.hpp"
 #include "maybeResult.hpp"
 #include "PixelGridContainer.hpp"
+#include "action_types.h"
 
-struct SetPixelAction;
-
-struct DrawCircle;
-
-struct DrawLineAction;
-
-struct DrawParallelogramAction;
-
-struct m_IgniteAction;
-
-struct IgnitionAction;
-
-struct ActionPair;
-
-struct IncinerationAction;
-
-struct m_IgniteAction;
-
-struct SetPixelMaterialAndProperties;
-
-using Action = std::variant<SetPixelAction, DrawCircle, DrawLineAction, DrawParallelogramAction, IgnitionAction, IncinerationAction, m_IgniteAction, SetPixelMaterialAndProperties>;
-
-using ActionIncludingPair = std::variant<Action, ActionPair>;
-
-struct Pixel 
-{
-    uint8_t material;
-    uint8_t updateFrame;
-    uint8_t properties;
-};
-
-using FirePixel = material_properties::ignitionProperties;
-
-struct SetPixelAction
-{
-    Vec2i pos;
-    Pixel pixel_type;
-};
-
-struct DrawCircle
-{
-    Vec2i pos;
-    int radius;
-    Pixel pixel_type;
-};
-
-struct DrawLineAction
-{
-    Vec2i start;
-    Vec2i end;
-    int width;
-    Pixel pixel_type;
-};
-
-struct DrawParallelogramAction
-{
-    Vec2i cornerTL;
-    Vec2i cornerTR;
-    Vec2i cornerBL;
-    Pixel pixel_type;
-};
-
-
-struct m_IgniteAction
-{
-    FirePixel fireProperties;
-    Vec2i     pos;
-};
-
-struct IgnitionAction {
-    Vec2i pos;
-};
-
-struct IncinerationAction {
-    Vec2i pos;
-    Pixel pixel;
-};
-
-
-struct SetPixelMaterialAndProperties{
-    Vec2i pos;
-    uint8_t material;
-    uint8_t properties;
-};
-
-struct ActionPair {
-    std::pair<Action, Action> this_action;
-};
-
+#pragma once
 
 // TODO test whether it is more efficient to store all the pixels in a single 
 // 1D pixel and use maths to determine row and collum 
@@ -125,9 +38,10 @@ const sf::Color SmokeGray(96, 96, 96, 150);        // Translucent smoke
 const sf::Color MetalGray(127, 128, 128);           // Metal surfaces
 
 
-
 class PixelGrid
 {
+    public:
+    // bool updated {false};
     PixelGridContainer<Pixel>     m_pixelGrid;
     PixelGridContainer<Vec2f>     m_velocityField;
     PixelGridContainer<FirePixel> m_fireField;
@@ -139,58 +53,17 @@ class PixelGrid
 
     std::vector<ActionIncludingPair> m_actionQueue;
 
-
     FirePixel m_nullFire = material_properties::nullBurnProperties;
 
-
-    std::random_device rd; 
+    std::mt19937 m_randomGen;
 
     uint8_t m_globalUpdateFrame = 0;
 
-
     // Define colors per material in RGBA, 4 bytes per material
     // Indexing: materialToColor_c[material * 4 + 0..3]
-    std::vector<sf::Uint8> m_materialToColor_c = {
-        // Air -> transparent (alpha 0)
-        0, 0, 0, 0,
-
-        // Sand -> sandy yellow
-        194, 178, 128, 255,
-
-        // Water -> blue, semi-transparent
-        0, 0, 255, 180,
-
-        // Stone -> grey
-        84, 72, 61, 255,
-
-        // steel -> silver / blue grey
-        132, 140, 140, 255,
-
-        // wood brown
-        173, 140, 99, 255,
-
-        // oil
-        145, 108, 4, 128,
-
-        // coal
-        94, 94, 94, 255,
-
-        // ash
-        166, 166, 166, 255,
-
-        // steam
-        145, 176, 194, 255,
-
-        // lava 
-        89, 28, 10, 255,
-
-        // obsidian 
-        28, 18, 15, 255,
-    };
 
     std::vector<std::uint8_t> m_fireColor = {189, 84, 40, 180};
-
-
+    private:
 
     bool isInBounds(Vec2i pos) const {
         if (pos.x < 0 || pos.x >= m_gridWidth) {
@@ -392,7 +265,12 @@ class PixelGrid
     }
 
     maybeResult<ActionIncludingPair> generalFireSpreadPhysics(Vec2i pos, std::mt19937 & randomGen) const {
-        std::vector<Vec2i> neighborDelta = {Vec2i(1,0), Vec2i(1,-1), Vec2i(0,-1), Vec2i(-1,-1), Vec2i(-1,0), Vec2i(-1,1), Vec2i(0,1), Vec2i(1,1)};
+        std::vector<Vec2i> neighborDelta = {
+            Vec2i(1,0), Vec2i(1,-1), 
+            Vec2i(0,-1), Vec2i(-1,-1), 
+            Vec2i(-1,0), Vec2i(-1,1), 
+            Vec2i(0,1), Vec2i(1,1)
+        };
 
         Pixel thisPixel = m_pixelGrid[pos.x][pos.y];
         if (bitop::flag_has_mask(thisPixel.properties, pixel_properties::OnFire)) {
@@ -467,16 +345,15 @@ class PixelGrid
     void doPhysics() {
         m_globalUpdateFrame ++;
         bool n2 = bitop::check_nth_bit(m_globalUpdateFrame, 1);
-        std::mt19937 randomGen(rd());
         if (bitop::check_nth_bit(m_globalUpdateFrame, 0)) {
             for (int xi = 0; xi < m_gridWidth; xi++) {
                 if (n2) {
                     for (int yi = 0; yi < m_gridHeight; yi ++) {
-                        doPhysicsOnPixel(xi, yi, randomGen);
+                        doPhysicsOnPixel(xi, yi, m_randomGen);
                     }
                 } else {
                     for (int yi = m_gridHeight - 1; yi !=0; yi --) {
-                        doPhysicsOnPixel(xi,yi, randomGen);
+                        doPhysicsOnPixel(xi,yi, m_randomGen);
                     }
                 }
             }
@@ -484,11 +361,11 @@ class PixelGrid
             for (int xi = m_gridWidth - 1; xi !=0; xi --) {
                 if (n2) {
                     for (int yi = 0; yi < m_gridHeight; yi ++) {
-                        doPhysicsOnPixel(xi,yi, randomGen);
+                        doPhysicsOnPixel(xi,yi, m_randomGen);
                     }
                 } else {
                     for (int yi = m_gridHeight - 1; yi !=0; yi --) {
-                        doPhysicsOnPixel(xi,yi, randomGen);
+                        doPhysicsOnPixel(xi,yi, m_randomGen);
                     }
                 }
             }
@@ -816,10 +693,10 @@ class PixelGrid
                 size_t p = q * 4;
                 // if its not on fire and is not lava
                 if ((! bitop::flag_has_mask(m_pixelGrid[i][j].properties, pixel_properties::OnFire)) || (m_pixelGrid[i][j].material == materials::lava)) {
-                    m_buffer[p  ] = m_materialToColor_c[4 * m_pixelGrid[i][j].material];
-                    m_buffer[p+1] = m_materialToColor_c[4 * m_pixelGrid[i][j].material + 1];
-                    m_buffer[p+2] = m_materialToColor_c[4 * m_pixelGrid[i][j].material + 2];
-                    m_buffer[p+3] = m_materialToColor_c[4 * m_pixelGrid[i][j].material + 3];
+                    m_buffer[p  ] = materials::m_materialToColor_c[4 * m_pixelGrid[i][j].material];
+                    m_buffer[p+1] = materials::m_materialToColor_c[4 * m_pixelGrid[i][j].material + 1];
+                    m_buffer[p+2] = materials::m_materialToColor_c[4 * m_pixelGrid[i][j].material + 2];
+                    m_buffer[p+3] = materials::m_materialToColor_c[4 * m_pixelGrid[i][j].material + 3];
                 } else {
                     m_buffer[p  ] = m_fireColor[0];
                     m_buffer[p+1] = m_fireColor[1]; 
@@ -836,7 +713,8 @@ public:
 
     PixelGrid(int width, int height) 
         : m_gridWidth(width), m_gridHeight(height),
-        m_buffer(static_cast<size_t>(width * height * 4))
+        m_buffer(static_cast<size_t>(width * height * 4)),
+        m_randomGen(std::random_device{}())
     {
         init();
     }
@@ -866,11 +744,16 @@ public:
     }
 
     void userAction(ActionIncludingPair userAction) {
+        std::cout<<"here\n";
         m_actionQueue.push_back(userAction);
     }
 
     auto& getPixels() {
         return m_buffer;
+    }
+
+    auto& getPixelData() {
+        return m_pixelGrid;
     }
 
     const std::vector<uint8_t>& getWindowView(Vec2i corner, Vec2i boxSize) {

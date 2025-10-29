@@ -1,41 +1,116 @@
 #include <SFML/Graphics/Texture.hpp>
 #include <iostream>
 #include <string>
+#include <sstream>
 #include <sys/types.h>
 #include "Game.h"
 #include "Materials.h"
 #include "UserInputOptions.h"
 #include "Vec2.hpp"
+#include <fstream>
 #include "imgui-SFML.h"
+#include <algorithm>
+#include <cctype>
 #include "imgui.h"
+#include <map>
+#include <variant>
+#include <format>
+#include <charconv>
+#include <type_traits>
+#include <functional>
 
-Game::Game(const std::string& config) : m_pixelGrid(m_width, m_height)
+
+Game::Game(const std::string& config)
 {
-    init(config);
+    auto options = load_config(config);
+    init(options);
+}
+
+// 0: int, 1: size_t, 2: bool, 3: string
+LoadedConfig Game::load_config(std::string filePath) {
+    LoadedConfig config {};
+
+    std::map<std::string, std::function<void(LoadedConfig&, const std::string&)>> setter_register =  {
+        {"renderingEngine", make_setter(&LoadedConfig::rendering_engine)},
+        {"gridWidth", make_setter(&LoadedConfig::pGrid_width)},
+        {"gridHeight", make_setter(&LoadedConfig::pGrid_height)},
+        {"fps", make_setter(&LoadedConfig::fps)},
+        {"scale", make_setter(&LoadedConfig::scale)},
+        {"windowWidth", make_setter(&LoadedConfig::window_width)},
+        {"windowHeight", make_setter(&LoadedConfig::window_height)},
+    };
+
+    std::ifstream configFile {filePath} ;
+    if (!configFile.is_open()) {
+        std::cerr << "Error: cannot open " << filePath << "\n";
+    };
+    
+
+    std::string line;
+    while (std::getline(configFile, line)) {
+        if (line.empty() || line[0] == '#') { continue; }
+
+        std::istringstream ss{line};
+
+        std::string conf_name, conf_value ;
+
+        if (!(ss >> conf_name >> conf_value)) {
+            std::cerr << std::format("mallformed conf line with less than two elements: {}\n", line);
+        };
+
+
+        auto register_pair_it = setter_register.find(conf_name);
+
+        if (register_pair_it == setter_register.end()) {
+            std::cerr << std::format("unknown config key {}\n", conf_name);
+        }
+
+        (register_pair_it->second)(config, conf_value);
+    }
+    printConfig(config, std::cout);
+
+    return config; 
+};
+
+void
+Game::initializeSFML2(LoadedConfig & l_config) {
+    SFML2State & sstate = state.sfml2_state;
+    LoadedConfig & pstate = state.persistent_state;
+
+    sstate.window_height = pstate.scale * pstate.pGrid_height;
+    sstate.window_width  = pstate.scale * pstate.pGrid_width;
+
+    sstate.draw_texture_height = sstate.window_height / pstate.scale;
+    sstate.draw_texture_width = sstate.window_width / pstate.scale;
+    
+    sstate.window.create(
+        sf::VideoMode(static_cast<u_int>(state.sfml2_state.window_width), 
+                      static_cast<uint>(state.sfml2_state.window_height)),
+        "Falling sand sim");
+
+    state.sfml2_state.window.setFramerateLimit(state.persistent_state.fps);
+
+    ImGui::SFML::Init(state.sfml2_state.window);
+
+    ImGui::GetStyle().ScaleAllSizes(1.0f);
+    ImGui::GetIO().FontGlobalScale = 2.0f;
+
+    sstate.texture.create(
+        static_cast<u_int>(sstate.draw_texture_width), static_cast<u_int>(sstate.draw_texture_height)
+    );
+    sstate.sprite.setTexture(sstate.texture);
+    sstate.sprite.setScale(static_cast<float>(pstate.scale), static_cast<float>(pstate.scale));
 }
 
 void
-Game::init(const std::string & path)
+Game::init(LoadedConfig l_config)
 {
-    // TODO add code here to load config from config.txt
+    state.persistent_state = l_config;
+    state.draw_pixel_type = {materials::sand, 0, material_properties::IsPowder};
+    state.pixel_grid = PixelGrid(l_config.pGrid_width, l_config.pGrid_height);
+    state.parallelogramState = ParallelogramState();
 
-    m_window.create(sf::VideoMode(static_cast<u_int>(m_windowWidth), static_cast<uint>(m_windowHeight)),
-                    "Falling sand sim");
-    m_window.setFramerateLimit(static_cast<u_int>(m_fps));
-
-    ImGui::SFML::Init(m_window);
-
-    ImGui::GetStyle().ScaleAllSizes(2.0f);
-    ImGui::GetIO().FontGlobalScale = 2.0f;
-    /*m_pixelGrid = PixelGrid(m_windowWidth / m_scale, m_windowHeight / m_scale);*/
-
-    m_texture.create(static_cast<u_int>(m_width), static_cast<u_int>(m_height));
-
-    /*std::cout << "Making sprite\n";*/
-    // Create a sprite to display the texture
-    m_sprite.setTexture(m_texture);
-    m_sprite.setScale(static_cast<float>(m_scale), static_cast<float>(m_scale)); // Scale up
-    /*std::cout << "sprite made\n";*/
+    initializeSFML2(l_config);
 
     previousTime = clock::now();
 }
@@ -43,21 +118,22 @@ Game::init(const std::string & path)
 void
 Game::run() 
 {
-    while (m_running) 
+    while (state.running) 
     {
-        m_frameCount +=1 ;
+        state.frame_count +=1 ;
         auto currentTime = clock::now();
 
         seconds elapsed = currentTime - previousTime;
         if (elapsed.count() > 1.0) {
-            std::cout << "FPS: " << (m_frameCount) / elapsed.count() << std::endl; 
-            m_frameCount = 0;
+            std::cout << "FPS: " << (state.frame_count) / elapsed.count() << std::endl; 
+            state.frame_count = 0;
             previousTime = currentTime;
         }
         /*std::cout << "Running program\n";*/
-        m_pixelGrid.update();       
+        state.pixel_grid.update();       
         /*std::cout << "updated\n";*/
-        ImGui::SFML::Update(m_window, m_deltaClock.restart());
+        ImGui::SFML::Update(state.sfml2_state.window, state.sfml2_state.delta_clock.restart());
+
         sUserInput();
         heldButtons();
         sGui();
@@ -68,65 +144,66 @@ Game::run()
 void
 Game::sRender()
 {
-    m_window.clear();
+    state.sfml2_state.window.clear();
     /*std::cout << "in rendering function\n";*/
 
-    m_texture.update(m_pixelGrid.getPixels().data());
+    state.sfml2_state.texture.update(state.pixel_grid.getPixels().data());
 
     /*m_sprite.setTexture(m_texture);*/
     /*m_sprite.setScale(static_cast<float>(m_scale), static_cast<float>(m_scale)); // Scale up*/
-    m_window.draw(m_sprite);
-    ImGui::SFML::Render(m_window);
+    state.sfml2_state.window.draw(state.sfml2_state.sprite);
+    ImGui::SFML::Render(state.sfml2_state.window);
 
-    m_window.display();
+    state.sfml2_state.window.display();
 }
 
 
 void
 Game::paintBrush()
 {
-    if (m_left_button_pressed) {
-        sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
-        Vec2i simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
-        Vec2i previousSimulationPos = m_previousMousePos / m_scale;
-        ActionIncludingPair userAction = DrawLineAction{previousSimulationPos, simulationPos, m_paintBrushWidth-1, m_drawPixelType};
-        m_pixelGrid.userAction(userAction);
+    if (state.left_button_pressed) {
+        sf::Vector2i pixelPos = sf::Mouse::getPosition(state.sfml2_state.window);
+        Vec2i simulationPos = Vec2i{pixelPos / static_cast<int>(state.persistent_state.scale)};
+        Vec2i previousSimulationPos = state.previous_mouse_position/ state.persistent_state.scale;
+        ActionIncludingPair userAction = 
+        DrawLineAction{previousSimulationPos, simulationPos, state.paint_brush_width-1, state.draw_pixel_type};
+        state.pixel_grid.userAction(userAction);
     }
 }
 
 void
 Game::tryIgnite()
 {
-    if (m_left_button_pressed) {
-        sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
-        Vec2i simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
+    if (state.left_button_pressed) {
+        sf::Vector2i pixelPos = sf::Mouse::getPosition(state.sfml2_state.window);
+        Vec2i simulationPos = Vec2i{pixelPos / static_cast<int>(state.persistent_state.scale)};
         ActionIncludingPair userAction = IgnitionAction{simulationPos};
-        m_pixelGrid.userAction(userAction);
+        state.pixel_grid.userAction(userAction);
     }
 }
-void
-Game::holdAndDragLine() 
+void Game::holdAndDragLine()
 {
-    sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
-    Vec2i simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
+    sf::Vector2i pixelPos = sf::Mouse::getPosition(state.sfml2_state.window);
+    Vec2i simulationPos = Vec2i{pixelPos / static_cast<int>(state.persistent_state.scale)};
     if (hasUserLeftClicked()) {
-        m_dragLineStartSimulationPos = simulationPos; 
+        state.drag_line_start_simulation_pos = simulationPos; 
     } else if (hasUserLeftReleased()) {
-        ActionIncludingPair userAction = DrawLineAction{m_dragLineStartSimulationPos, simulationPos, m_drawLineWidth, m_drawPixelType};
-        m_pixelGrid.userAction(userAction);
+        ActionIncludingPair userAction = 
+        DrawLineAction{state.drag_line_start_simulation_pos, simulationPos, state.draw_line_width, state.draw_pixel_type};
+        state.pixel_grid.userAction(userAction);
     }
 }
 
 bool
 Game::hasUserLeftClicked()
 {
-    return !m_prev_left_button_pressed && m_left_button_pressed;
+    return !state.prev_left_button_pressed && state.left_button_pressed;
 }
 
 bool
 Game::hasUserLeftReleased()
 {
-    return m_prev_left_button_pressed && !m_left_button_pressed ;
+    return state.prev_left_button_pressed && !state.left_button_pressed;
 }
 
 void
@@ -134,65 +211,76 @@ Game::drawCircle()
 {
     if (hasUserLeftClicked()) 
     {
-        sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
-        Vec2i simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
-        ActionIncludingPair userAction = DrawCircle{simulationPos, m_drawCircleRadius, m_drawPixelType};
-        m_pixelGrid.userAction(userAction);
+        sf::Vector2i pixelPos = sf::Mouse::getPosition(state.sfml2_state.window);
+        Vec2i simulationPos = Vec2i{pixelPos / static_cast<int>(state.persistent_state.scale)};
+        ActionIncludingPair userAction = 
+        DrawCircle{simulationPos, state.draw_circle_radius, state.draw_pixel_type};
+
+        state.pixel_grid.userAction(userAction);
     }
 }
 
 void
 Game::drawParallelogram()
 {
-    sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
-    Vec2i simulationPos = Vec2i{pixelPos / static_cast<int>(m_scale)};
+    sf::Vector2i pixelPos = sf::Mouse::getPosition(state.sfml2_state.window);
+    Vec2i simulationPos = Vec2i{pixelPos / static_cast<int>(state.persistent_state.scale)};
+
+    ParallelogramState & astate = state.parallelogramState;
 
     if (hasUserLeftClicked()) {
-        if (m_currentParallelogramState == WaitingForStart) {
-            m_firstParallelogramPoint = simulationPos;
-            m_currentParallelogramState = HeldDown1;
+
+        if (astate.current_parallelogram_state == astate.WaitingForStart) {
+            std::cout << "here1\n";
+            astate.first_parallelogram_point = simulationPos;
+            astate.current_parallelogram_state = astate.HeldDown;
         } 
-        else if (m_currentParallelogramState == WaitingForSecondClick) {
-            m_thirdParallelogramPoint = simulationPos;
-            m_currentParallelogramState = DrawingShape;
+        else if (astate.current_parallelogram_state == astate.WaitingForSecondClick) {
+            std::cout << "here3\n";
+            astate.third_parallelogram_point = simulationPos;
+
+            astate.current_parallelogram_state = astate.WaitingForStart;
+            ActionIncludingPair action = 
+            DrawParallelogramAction{astate.first_parallelogram_point, astate.second_parallelogram_point, 
+                astate.third_parallelogram_point, state.draw_pixel_type};
+
+            state.pixel_grid.userAction(action);
         }
     } 
     else if (hasUserLeftReleased()) {
-        if (m_currentParallelogramState == HeldDown1) {
-            m_secondParallelogramPoint = simulationPos;
-            m_currentParallelogramState = WaitingForSecondClick;
-        }
-    }
+            std::cout << "here2\n";
 
-    if (m_currentParallelogramState == DrawingShape) {
-        m_currentParallelogramState = WaitingForStart;
-        ActionIncludingPair action = DrawParallelogramAction{m_firstParallelogramPoint, m_secondParallelogramPoint, m_thirdParallelogramPoint, m_drawPixelType};
-        m_pixelGrid.userAction(action);
+        if (astate.current_parallelogram_state == astate.HeldDown) {
+            std::cout << "here2.5\n";
+
+            astate.second_parallelogram_point = simulationPos;
+            astate.current_parallelogram_state = astate.WaitingForSecondClick;
+        }
     }
 }
 
 void
 Game::heldButtons() {
-    sf::Vector2i pixelPos = sf::Mouse::getPosition(m_window);
+    sf::Vector2i pixelPos = sf::Mouse::getPosition(state.sfml2_state.window);
     bool isHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow);
     Vec2i pixelPos2i = Vec2i(pixelPos.x, pixelPos.y);
     if (!isHovered) {
-        if (m_drawMethod == inputModes::paintBrush) {
+        if (state.draw_method == inputModes::paintBrush) {
             paintBrush();   
-        } else if (m_drawMethod== inputModes::holdAndDragLine) {
+        } else if (state.draw_method == inputModes::holdAndDragLine) {
             holdAndDragLine();
-        } else if (m_drawMethod== inputModes::drawCircle) {
+        } else if (state.draw_method == inputModes::drawCircle) {
             drawCircle();
-        } else if (m_drawMethod == inputModes::drawParallelogram) {
+        } else if (state.draw_method == inputModes::drawParallelogram) {
             drawParallelogram();
-        } else if (m_drawMethod == inputModes::ignitePixel) {
+        } else if (state.draw_method == inputModes::ignitePixel) {
             tryIgnite();
         }
 
     }
 
-    m_prev_left_button_pressed = m_left_button_pressed;
-    m_previousMousePos = pixelPos2i;
+    state.prev_left_button_pressed = state.left_button_pressed;
+    state.previous_mouse_position= pixelPos2i;
 }
 
 
@@ -200,17 +288,17 @@ void
 Game::sUserInput() {
     sf::Event event;
     if (!ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
-        while (m_window.pollEvent(event)) {
-            ImGui::SFML::ProcessEvent(m_window, event);
+        while (state.sfml2_state.window.pollEvent(event)) {
+            ImGui::SFML::ProcessEvent(state.sfml2_state.window, event);
 
             if (event.type == sf::Event::Closed) {
-                m_running = false;
+                state.running= false;
             }
 
             if (event.type == sf::Event::MouseButtonPressed) {
                 switch (event.mouseButton.button) {
                     case sf::Mouse::Left:
-                        m_left_button_pressed = true;
+                        state.left_button_pressed = true;
                     case sf::Mouse::Right:
                         break;
                     case sf::Mouse::Middle:
@@ -223,7 +311,7 @@ Game::sUserInput() {
             if (event.type == sf::Event::MouseButtonReleased) {
                 switch (event.mouseButton.button) {
                     case sf::Mouse::Left:
-                        m_left_button_pressed = false;
+                        state.left_button_pressed = false;
                     case sf::Mouse::Right:
                         break;
                     case sf::Mouse::Middle:
@@ -259,7 +347,7 @@ Game::sGui()
             }
             ImGui::EndListBox();
 
-            m_drawPixelType.material = materials::materials[itemSelectedIDX];
+            state.draw_pixel_type.material = materials::materials[itemSelectedIDX];
         }
         ImGui::TreePop();
         }
@@ -280,56 +368,56 @@ Game::sGui()
                 }
             }
 
-            m_drawMethod = inputModes::inputModes[drawingMethodSelectedIDX];
+            state.draw_method= inputModes::inputModes[drawingMethodSelectedIDX];
             ImGui::EndListBox();
         }
         
-        if (m_drawMethod == inputModes::paintBrush) 
+        if (state.draw_method == inputModes::paintBrush) 
         {
             float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
             ImGui::AlignTextToFramePadding();
             ImGui::Text("Paint brush size:");
             ImGui::SameLine();
             ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true);
-            if (ImGui::ArrowButton("##left", ImGuiDir_Left) && m_paintBrushWidth > 1) { m_paintBrushWidth--; }
+            if (ImGui::ArrowButton("##left", ImGuiDir_Left) && state.paint_brush_width > 1) { state.paint_brush_width --; }
             ImGui::SameLine(0.0f, spacing);
-            if (ImGui::ArrowButton("##right", ImGuiDir_Right)) { m_paintBrushWidth++; }
+            if (ImGui::ArrowButton("##right", ImGuiDir_Right)) { state.paint_brush_width ++; }
             ImGui::PopItemFlag();
             ImGui::SameLine();
-            ImGui::Text("%d", m_paintBrushWidth);
+            ImGui::Text("%d", state.paint_brush_width);
         } 
-        else if (m_drawMethod == inputModes::holdAndDragLine) 
+        else if (state.draw_method == inputModes::holdAndDragLine) 
         {
             float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
             ImGui::AlignTextToFramePadding();
             ImGui::Text("Draw line width:");
             ImGui::SameLine();
             ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true);
-            if (ImGui::ArrowButton("##left", ImGuiDir_Left) && m_drawLineWidth > 1) { m_drawLineWidth--; }
+            if (ImGui::ArrowButton("##left", ImGuiDir_Left) && state.draw_line_width> 1) { state.draw_line_width--; }
             ImGui::SameLine(0.0f, spacing);
-            if (ImGui::ArrowButton("##right", ImGuiDir_Right)) { m_drawLineWidth++; }
+            if (ImGui::ArrowButton("##right", ImGuiDir_Right)) { state.draw_line_width++; }
             ImGui::PopItemFlag();
             ImGui::SameLine();
-            ImGui::Text("%d", m_drawLineWidth);
+            ImGui::Text("%d", state.draw_line_width);
         } 
-        else if (m_drawMethod == inputModes::drawCircle) 
+        else if (state.draw_method == inputModes::drawCircle) 
         {
             float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
             ImGui::AlignTextToFramePadding();
             ImGui::Text("Circle radius:");
             ImGui::SameLine();
             ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true);
-            if (ImGui::ArrowButton("##left", ImGuiDir_Left) && m_drawCircleRadius> 1) { m_drawCircleRadius--; }
+            if (ImGui::ArrowButton("##left", ImGuiDir_Left) && state.draw_circle_radius > 1) { state.draw_circle_radius --; }
             ImGui::SameLine(0.0f, spacing);
-            if (ImGui::ArrowButton("##right", ImGuiDir_Right)) { m_drawCircleRadius++; }
+            if (ImGui::ArrowButton("##right", ImGuiDir_Right)) { state.draw_circle_radius ++; }
             ImGui::PopItemFlag();
             ImGui::SameLine();
-            ImGui::Text("%d", m_drawCircleRadius);
+            ImGui::Text("%d", state.draw_circle_radius );
         } 
-        else if (m_drawMethod == inputModes::drawParallelogram) 
+        else if (state.draw_method == inputModes::drawParallelogram) 
         {
         }
-        else if (m_drawMethod == inputModes::ignitePixel) 
+        else if (state.draw_method == inputModes::ignitePixel) 
         {
         }
 
@@ -337,16 +425,16 @@ Game::sGui()
     }
 
     if (ImGui::TreeNode("Window movement")) {
-        ImGui::DragInt2("Window position", (int*)&m_windowPosition);
+        ImGui::DragInt2("Window position", (int*)&state.window_position);
 
         float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
         ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true);
-        if (ImGui::ArrowButton("##left", ImGuiDir_Left)) { m_scale--; }
+        if (ImGui::ArrowButton("##left", ImGuiDir_Left)) { state.persistent_state.scale--; }
         ImGui::SameLine(0.0f, spacing);
-        if (ImGui::ArrowButton("##right", ImGuiDir_Right)) { m_scale++; }
+        if (ImGui::ArrowButton("##right", ImGuiDir_Right)) { state.persistent_state.scale++; }
         ImGui::PopItemFlag();
         ImGui::SameLine();
-        ImGui::Text("%d", m_scale);
+        ImGui::Text("%d", state.persistent_state.scale);
         ImGui::TreePop();
     }
     ImGui::End();

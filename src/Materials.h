@@ -25,6 +25,21 @@ constexpr uint8_t obsidian = 0b00001011;
 
 constexpr int NumMaterials = 12; 
 
+constexpr uint8_t m_materialToColor_c[NumMaterials * 4] = {
+    0, 0, 0, 0,  // Air -> transparent (alpha 0)
+    194, 178, 128, 255, // Sand -> sandy yellow
+    0, 0, 255, 180, // Water -> blue, semi-transparent
+    84, 72, 61, 255, // Stone -> grey
+    132, 140, 140, 255, // steel -> silver / blue grey
+    173, 140, 99, 255, // wood brown
+    145, 108, 4, 128, // oil
+    94, 94, 94, 255, // coal
+    166, 166, 166, 255, // ash
+    145, 176, 194, 255, // steam
+    89, 28, 10, 255, // lava 
+    28, 18, 15, 255, // obsidian 
+};
+
 // Material names for UI display (e.g., ImGui picker)
 constexpr const char* materialNames[NumMaterials] = {
     "air",

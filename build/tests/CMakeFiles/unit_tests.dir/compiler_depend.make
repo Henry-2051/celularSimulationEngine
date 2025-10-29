@@ -311,8 +311,8 @@ tests/CMakeFiles/unit_tests.dir/test_main.cpp.o: /home/quartz/sync/codingProject
   /nix/store/ffrg0560kj0066s4k9pznjand907nlnz-gcc-14.3.0/include/c++/14.3.0/x86_64-unknown-linux-gnu/bits/os_defines.h \
   /nix/store/ffrg0560kj0066s4k9pznjand907nlnz-gcc-14.3.0/include/c++/14.3.0/x86_64-unknown-linux-gnu/bits/time_members.h
 
-tests/unit_tests: _deps/catch2-build/src/libCatch2.a \
-  _deps/catch2-build/src/libCatch2Main.a \
+tests/unit_tests: _deps/catch2-build/src/libCatch2Maind.a \
+  _deps/catch2-build/src/libCatch2d.a \
   /nix/store/0bhv7asksrwac04m9vjiqs2hdrm2jrc4-libx11-1.8.12/lib/libX11.so.6 \
   /nix/store/0bzvfigj8g5fsl3vfclfmfqczzchqqgh-libxau-1.0.12/lib/libXau.so.6 \
   /nix/store/1c663ln6chbg168dmri24z9nx6i9g65a-dbus-1.14.10-lib/lib/libdbus-1.so.3 \
@@ -446,6 +446,8 @@ tests/CMakeFiles/unit_tests.dir/test_main.cpp.o:
 
 /nix/store/0bzvfigj8g5fsl3vfclfmfqczzchqqgh-libxau-1.0.12/lib/libXau.so.6:
 
+_deps/catch2-build/src/libCatch2Maind.a:
+
 /nix/store/ffrg0560kj0066s4k9pznjand907nlnz-gcc-14.3.0/include/c++/14.3.0/x86_64-unknown-linux-gnu/bits/time_members.h:
 
 /nix/store/ffrg0560kj0066s4k9pznjand907nlnz-gcc-14.3.0/include/c++/14.3.0/x86_64-unknown-linux-gnu/bits/ctype_base.h:
@@ -459,8 +461,6 @@ tests/CMakeFiles/unit_tests.dir/test_main.cpp.o:
 /nix/store/ffrg0560kj0066s4k9pznjand907nlnz-gcc-14.3.0/include/c++/14.3.0/x86_64-unknown-linux-gnu/bits/c++allocator.h:
 
 /nix/store/ffrg0560kj0066s4k9pznjand907nlnz-gcc-14.3.0/include/c++/14.3.0/x86_64-unknown-linux-gnu/bits/atomic_word.h:
-
-_deps/catch2-build/src/libCatch2.a:
 
 /nix/store/ffrg0560kj0066s4k9pznjand907nlnz-gcc-14.3.0/include/c++/14.3.0/variant:
 
@@ -641,6 +641,8 @@ _deps/catch2-src/src/catch2/interfaces/catch_interfaces_test_invoker.hpp:
 _deps/catch2-src/src/catch2/internal/catch_config_static_analysis_support.hpp:
 
 _deps/catch2-src/src/catch2/internal/catch_stringref.hpp:
+
+_deps/catch2-build/src/libCatch2d.a:
 
 /nix/store/0vqrw0y515015i3065r9s00jcp1cd4hy-glibc-2.40-66-dev/include/bits/stdio_lim.h:
 
@@ -969,8 +971,6 @@ _deps/catch2-src/src/catch2/interfaces/catch_interfaces_capture.hpp:
 /nix/store/ffrg0560kj0066s4k9pznjand907nlnz-gcc-14.3.0/include/c++/14.3.0/bits/char_traits.h:
 
 /nix/store/g48529av5z0vcsyl4d2wbh9kl58c7p73-systemd-minimal-258/lib/libsystemd.so.0:
-
-_deps/catch2-build/src/libCatch2Main.a:
 
 /nix/store/ffrg0560kj0066s4k9pznjand907nlnz-gcc-14.3.0/include/c++/14.3.0/bits/charconv.h:
 
